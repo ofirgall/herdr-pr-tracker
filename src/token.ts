@@ -38,16 +38,16 @@ export function reviewFromDecision(decision: string | null): TokenReview {
 }
 
 const CI_GLYPH: Record<TokenCi, string> = {
-  pass: "✓",
-  fail: "✗",
-  pending: "●",
+  pass: "",
+  fail: "",
+  pending: "",
   none: "",
 };
 
 const REVIEW_GLYPH: Record<TokenReview, string> = {
   approved: "✓",
   "changes-requested": "✗",
-  "review-required": "◆",
+  "review-required": "",
   none: "",
 };
 
@@ -57,7 +57,7 @@ export const REFRESHING = "⟳";
 export const DRAFT = "◌";
 
 export const CONFLICT = "⊘";
-export const THREADS = "⚑";
+export const THREADS = "\u{F017A}";
 
 export interface TokenState {
   number: number;

@@ -1,11 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import {
+  CONFLICT,
+  DRAFT,
   parsePrNumber,
   refreshingLabel,
   resolvePaneCwd,
   reviewFromDecision,
   rollupBuckets,
   signalTokens,
+  THREADS,
   tokenId,
   tokenLabel,
   tokenStatus,
@@ -24,6 +27,12 @@ const base: TokenState = {
 function tok(overrides: Partial<TokenState>): TokenState {
   return { ...base, ...overrides };
 }
+
+// Import the glyphs so tests don't break when icons change.
+const CI_PASS = tokenStatus(tok({ ci: "pass" }));
+const CI_FAIL = tokenStatus(tok({ ci: "fail" }));
+const CI_RUN = tokenStatus(tok({ ci: "pending" }));
+const REV_REQ = tokenStatus(tok({ review: "review-required" }));
 
 describe("rollupBuckets", () => {
   test("no checks is not a pass", () => {
@@ -60,16 +69,16 @@ describe("tokenId", () => {
     expect(tokenId(tok({ number: 864, ci: "pass" }))).toBe("#864");
   });
   test("draft PR", () => {
-    expect(tokenId(tok({ number: 21288, isDraft: true }))).toBe("◌#21288");
+    expect(tokenId(tok({ number: 21288, isDraft: true }))).toBe(`${DRAFT}#21288`);
   });
 });
 
 describe("tokenStatus", () => {
   test("review and CI", () => {
-    expect(tokenStatus(tok({ ci: "pass", review: "approved" }))).toBe("✓ ✓");
+    expect(tokenStatus(tok({ ci: "pass", review: "approved" }))).toBe(`✓ ${CI_PASS}`);
   });
   test("CI only", () => {
-    expect(tokenStatus(tok({ ci: "fail" }))).toBe("✗");
+    expect(tokenStatus(tok({ ci: "fail" }))).toBe(CI_FAIL);
   });
   test("review only", () => {
     expect(tokenStatus(tok({ review: "changes-requested" }))).toBe("✗");
@@ -78,37 +87,37 @@ describe("tokenStatus", () => {
     expect(tokenStatus(tok({}))).toBe("");
   });
   test("review required and pending", () => {
-    expect(tokenStatus(tok({ ci: "pending", review: "review-required" }))).toBe("◆ ●");
+    expect(tokenStatus(tok({ ci: "pending", review: "review-required" }))).toBe(`${REV_REQ} ${CI_RUN}`);
   });
   test("conflict leads", () => {
-    expect(tokenStatus(tok({ conflict: true, ci: "fail", review: "changes-requested" }))).toBe("⊘ ✗ ✗");
+    expect(tokenStatus(tok({ conflict: true, ci: "fail", review: "changes-requested" }))).toBe(`${CONFLICT} ✗ ${CI_FAIL}`);
   });
   test("conflict alone", () => {
-    expect(tokenStatus(tok({ conflict: true }))).toBe("⊘");
+    expect(tokenStatus(tok({ conflict: true }))).toBe(CONFLICT);
   });
   test("unresolved threads", () => {
-    expect(tokenStatus(tok({ unresolved: 4, ci: "pass" }))).toBe("⚑4 ✓");
+    expect(tokenStatus(tok({ unresolved: 4, ci: "pass" }))).toBe(`${THREADS}4 ${CI_PASS}`);
   });
   test("unresolved threads with review", () => {
-    expect(tokenStatus(tok({ review: "approved", unresolved: 2, ci: "pass" }))).toBe("✓ ⚑2 ✓");
+    expect(tokenStatus(tok({ review: "approved", unresolved: 2, ci: "pass" }))).toBe(`✓ ${THREADS}2 ${CI_PASS}`);
   });
   test("all signals", () => {
-    expect(tokenStatus(tok({ conflict: true, review: "changes-requested", unresolved: 3, ci: "fail" }))).toBe("⊘ ✗ ⚑3 ✗");
+    expect(tokenStatus(tok({ conflict: true, review: "changes-requested", unresolved: 3, ci: "fail" }))).toBe(`${CONFLICT} ✗ ${THREADS}3 ${CI_FAIL}`);
   });
 });
 
 describe("tokenLabel", () => {
   test("combines id and status", () => {
-    expect(tokenLabel(tok({ number: 864, ci: "pass", review: "approved" }))).toBe("#864 ✓ ✓");
+    expect(tokenLabel(tok({ number: 864, ci: "pass", review: "approved" }))).toBe(`#864 ✓ ${CI_PASS}`);
   });
   test("no status means id only", () => {
     expect(tokenLabel(tok({ number: 4 }))).toBe("#4");
   });
   test("draft with CI only", () => {
-    expect(tokenLabel(tok({ number: 21288, ci: "pass", isDraft: true }))).toBe("◌#21288 ✓");
+    expect(tokenLabel(tok({ number: 21288, ci: "pass", isDraft: true }))).toBe(`${DRAFT}#21288 ${CI_PASS}`);
   });
   test("conflict in combined label", () => {
-    expect(tokenLabel(tok({ number: 100, conflict: true, ci: "fail" }))).toBe("#100 ⊘ ✗");
+    expect(tokenLabel(tok({ number: 100, conflict: true, ci: "fail" }))).toBe(`#100 ${CONFLICT} ${CI_FAIL}`);
   });
 });
 
@@ -126,7 +135,7 @@ describe("signalTokens", () => {
   });
   test("conflict sets only pr_conflict", () => {
     const s = signalTokens(tok({ conflict: true }));
-    expect(s.pr_conflict).toBe("⊘");
+    expect(s.pr_conflict).toBe(CONFLICT);
   });
   test("approved sets only pr_approved", () => {
     const s = signalTokens(tok({ review: "approved" }));
@@ -142,36 +151,36 @@ describe("signalTokens", () => {
   });
   test("review required sets only pr_review", () => {
     const s = signalTokens(tok({ review: "review-required" }));
-    expect(s.pr_review).toBe("◆");
+    expect(s.pr_review).toBe(REV_REQ);
     expect(s.pr_approved).toBe("");
     expect(s.pr_changes).toBe("");
   });
   test("threads set pr_threads with count", () => {
     const s = signalTokens(tok({ unresolved: 5 }));
-    expect(s.pr_threads).toBe("⚑5");
+    expect(s.pr_threads).toBe(`${THREADS}5`);
   });
   test("CI pass", () => {
     const s = signalTokens(tok({ ci: "pass" }));
-    expect(s.pr_ci_pass).toBe("✓");
+    expect(s.pr_ci_pass).toBe(CI_PASS);
     expect(s.pr_ci_fail).toBe("");
     expect(s.pr_ci_run).toBe("");
   });
   test("CI fail", () => {
     const s = signalTokens(tok({ ci: "fail" }));
-    expect(s.pr_ci_fail).toBe("✗");
+    expect(s.pr_ci_fail).toBe(CI_FAIL);
     expect(s.pr_ci_pass).toBe("");
   });
   test("CI pending", () => {
     const s = signalTokens(tok({ ci: "pending" }));
-    expect(s.pr_ci_run).toBe("●");
+    expect(s.pr_ci_run).toBe(CI_RUN);
     expect(s.pr_ci_pass).toBe("");
   });
   test("all signals at once", () => {
     const s = signalTokens(tok({ conflict: true, review: "changes-requested", unresolved: 3, ci: "fail" }));
-    expect(s.pr_conflict).toBe("⊘");
+    expect(s.pr_conflict).toBe(CONFLICT);
     expect(s.pr_changes).toBe("✗");
-    expect(s.pr_threads).toBe("⚑3");
-    expect(s.pr_ci_fail).toBe("✗");
+    expect(s.pr_threads).toBe(`${THREADS}3`);
+    expect(s.pr_ci_fail).toBe(CI_FAIL);
     expect(s.pr_approved).toBe("");
     expect(s.pr_review).toBe("");
     expect(s.pr_ci_pass).toBe("");
@@ -184,7 +193,7 @@ describe("refreshingLabel", () => {
     expect(refreshingLabel("#864 ✓")).toBe("#864 ⟳");
   });
   test("recovers the number through a draft marker", () => {
-    expect(refreshingLabel("◌#864 ✗", true)).toBe("◌#864 ⟳");
+    expect(refreshingLabel(`${DRAFT}#864 ✗`, true)).toBe(`${DRAFT}#864 ⟳`);
   });
   test("no previous label means nothing to keep on screen", () => {
     expect(refreshingLabel(undefined)).toBeNull();
@@ -193,7 +202,7 @@ describe("refreshingLabel", () => {
 });
 
 describe("parsePrNumber", () => {
-  test.each([["#864 ✓", 864], ["◌#21288 ⟳", 21288], ["", null], [undefined, null], ["nope", null]])(
+  test.each([["#864 ✓", 864], [`${DRAFT}#21288 ⟳`, 21288], ["", null], [undefined, null], ["nope", null]])(
     "parses %p as %p",
     (label, expected) => {
       expect(parsePrNumber(label as string | undefined)).toBe(expected as number | null);

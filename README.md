@@ -189,16 +189,19 @@ The plugin writes sidebar tokens on agent panes (per-branch) and on workspaces
 For colored rendering, each signal has its own token — set to its glyph when
 active, absent when not — so the sidebar config can assign a fixed color:
 
-| Token | Glyph | Signal |
-|---|---|---|
-| `$pr_conflict` | `⊘` | Cannot merge — conflict |
-| `$pr_changes` | `✗` | Changes requested |
-| `$pr_review` | `◆` | Review required |
-| `$pr_threads` | `⚑N` | Unresolved review threads |
-| `$pr_approved` | `✓` | Approved |
-| `$pr_ci_pass` | `✓` | Checks passing |
-| `$pr_ci_fail` | `✗` | Checks failing |
-| `$pr_ci_run` | `●` | Checks running |
+| Token | Unicode | Nerd Font | Signal |
+|---|---|---|---|
+| `$pr_conflict` | `⊘` | `⊘` | Cannot merge — conflict |
+| `$pr_changes` | `✗` | `✗` | Changes requested |
+| `$pr_review` | `◆` | `` `nf-fa-eye` | Review required |
+| `$pr_threads` | `⚑N` | `󰅺N` `nf-md-comment_text_outline` | Unresolved review threads |
+| `$pr_approved` | `✓` | `✓` | Approved |
+| `$pr_ci_pass` | `✓` | `` `nf-fa-check` | Checks passing |
+| `$pr_ci_fail` | `✗` | `` `nf-fa-times` | Checks failing |
+| `$pr_ci_run` | `●` | `` `nf-fa-spinner` | Checks running |
+
+The sidebar uses [Nerd Font](https://www.nerdfonts.com/) icons where available;
+the Unicode column shows the fallback glyph the pane widget uses.
 
 ```toml
 [ui.sidebar.spaces]
