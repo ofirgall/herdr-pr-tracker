@@ -33,6 +33,10 @@ command = ["bun", "bin/token.ts"]
 on = "worktree.created"
 command = ["bun", "bin/token.ts"]
 
+[[events]]
+on = "workspace.focused"
+command = ["bun", "bin/token.ts"]
+
 [[actions]]
 id = "refresh"
 title = "Refresh PR status"

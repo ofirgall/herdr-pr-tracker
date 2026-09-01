@@ -9,6 +9,8 @@ export type Bucket = "pass" | "fail" | "pending" | "skipping" | "cancel";
 
 export type TokenCi = "pass" | "fail" | "pending" | "none";
 
+export type TokenReview = "approved" | "changes-requested" | "review-required" | "none";
+
 /**
  * Collapse gh's per-check buckets into one, worst news first.
  *
@@ -26,10 +28,26 @@ export function rollupBuckets(buckets: string[]): TokenCi {
   return "none";
 }
 
+export function reviewFromDecision(decision: string | null): TokenReview {
+  switch (decision) {
+    case "APPROVED": return "approved";
+    case "CHANGES_REQUESTED": return "changes-requested";
+    case "REVIEW_REQUIRED": return "review-required";
+    default: return "none";
+  }
+}
+
 const CI_GLYPH: Record<TokenCi, string> = {
   pass: "✓",
   fail: "✗",
   pending: "●",
+  none: "",
+};
+
+const REVIEW_GLYPH: Record<TokenReview, string> = {
+  approved: "✓",
+  "changes-requested": "✗",
+  "review-required": "◆",
   none: "",
 };
 
@@ -41,13 +59,27 @@ export const DRAFT = "◌";
 export interface TokenState {
   number: number;
   ci: TokenCi;
+  review: TokenReview;
   isDraft: boolean;
 }
 
-/** `◌#21288 ✓` — draft marker, number, CI glyph. */
+/** `◌#21288` — draft marker and number. */
+export function tokenId(s: TokenState): string {
+  return `${s.isDraft ? DRAFT : ""}#${s.number}`;
+}
+
+/** `✓ ✓` — review glyph then CI glyph, space-separated, trimmed. */
+export function tokenStatus(s: TokenState): string {
+  const r = REVIEW_GLYPH[s.review];
+  const c = CI_GLYPH[s.ci];
+  return [r, c].filter(Boolean).join(" ");
+}
+
+/** Legacy combined label: `◌#21288 ✓ ✓`. */
 export function tokenLabel(s: TokenState): string {
-  const glyph = CI_GLYPH[s.ci];
-  return `${s.isDraft ? DRAFT : ""}#${s.number}${glyph ? ` ${glyph}` : ""}`;
+  const status = tokenStatus(s);
+  const id = tokenId(s);
+  return status ? `${id} ${status}` : id;
 }
 
 /** Keep the number on screen while a refresh runs; only the glyph changes. */

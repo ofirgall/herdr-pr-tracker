@@ -178,13 +178,24 @@ reopening the pane never shows one view's rows under the other one's heading.
 
 ## The sidebar token
 
-The plugin also labels the focused agent pane's sidebar row with that pane's
-branch's pull request — `#21288 ✓`, or `◌#21288 ✓` for a draft. Add `$pr` to your
-agent row to see it:
+The plugin writes two sidebar tokens on agent panes (per-branch) and on
+workspaces (per-worktree):
+
+| Token | Example | Meaning |
+|---|---|---|
+| `$pr_id` | `#21288`, `◌#208` | PR number, with `◌` for drafts |
+| `$pr_status` | `✓ ✓`, `✗ ●`, `◆` | Review then CI glyph |
+
+Review glyphs: `✓` approved, `✗` changes requested, `◆` review required.
+CI glyphs: `✓` passing, `✗` failing, `●` running.
 
 ```toml
 [ui.sidebar.agents]
-rows = [["state_icon", "workspace", "tab", "$pr"], ["agent"]]
+[ui.sidebar.agents]
+rows = [["state_icon", "workspace", "tab"], ["agent", "$pr_status", "$pr_id"]]
+
+[ui.sidebar.spaces]
+rows = [["state_icon", "$pr_status", "workspace", "$pr_id"],  ["branch", "git_status"]]
 ```
 
 This replaces the `gh-pr` plugin, which did the same thing.

@@ -3,8 +3,11 @@ import {
   parsePrNumber,
   refreshingLabel,
   resolvePaneCwd,
+  reviewFromDecision,
   rollupBuckets,
+  tokenId,
   tokenLabel,
+  tokenStatus,
 } from "../src/token.ts";
 
 describe("rollupBuckets", () => {
@@ -25,17 +28,54 @@ describe("rollupBuckets", () => {
   });
 });
 
+describe("reviewFromDecision", () => {
+  test("maps GitHub review decisions", () => {
+    expect(reviewFromDecision("APPROVED")).toBe("approved");
+    expect(reviewFromDecision("CHANGES_REQUESTED")).toBe("changes-requested");
+    expect(reviewFromDecision("REVIEW_REQUIRED")).toBe("review-required");
+  });
+  test("null or unknown is none", () => {
+    expect(reviewFromDecision(null)).toBe("none");
+    expect(reviewFromDecision("SOMETHING_ELSE")).toBe("none");
+  });
+});
+
+describe("tokenId", () => {
+  test("plain PR", () => {
+    expect(tokenId({ number: 864, ci: "pass", review: "none", isDraft: false })).toBe("#864");
+  });
+  test("draft PR", () => {
+    expect(tokenId({ number: 21288, ci: "pass", review: "none", isDraft: true })).toBe("◌#21288");
+  });
+});
+
+describe("tokenStatus", () => {
+  test("review and CI", () => {
+    expect(tokenStatus({ number: 1, ci: "pass", review: "approved", isDraft: false })).toBe("✓ ✓");
+  });
+  test("CI only", () => {
+    expect(tokenStatus({ number: 1, ci: "fail", review: "none", isDraft: false })).toBe("✗");
+  });
+  test("review only", () => {
+    expect(tokenStatus({ number: 1, ci: "none", review: "changes-requested", isDraft: false })).toBe("✗");
+  });
+  test("nothing", () => {
+    expect(tokenStatus({ number: 1, ci: "none", review: "none", isDraft: false })).toBe("");
+  });
+  test("review required and pending", () => {
+    expect(tokenStatus({ number: 1, ci: "pending", review: "review-required", isDraft: false })).toBe("◆ ●");
+  });
+});
+
 describe("tokenLabel", () => {
-  test("uses the same glyphs as the pane", () => {
-    expect(tokenLabel({ number: 864, ci: "pass", isDraft: false })).toBe("#864 ✓");
-    expect(tokenLabel({ number: 864, ci: "fail", isDraft: false })).toBe("#864 ✗");
-    expect(tokenLabel({ number: 864, ci: "pending", isDraft: false })).toBe("#864 ●");
+  test("combines id and status", () => {
+    expect(tokenLabel({ number: 864, ci: "pass", review: "approved", isDraft: false })).toBe("#864 ✓ ✓");
   });
-  test("no checks means no glyph, not a claimed pass", () => {
-    expect(tokenLabel({ number: 4, ci: "none", isDraft: false })).toBe("#4");
+  test("no status means id only", () => {
+    expect(tokenLabel({ number: 4, ci: "none", review: "none", isDraft: false })).toBe("#4");
   });
-  test("marks a draft", () => {
-    expect(tokenLabel({ number: 21288, ci: "pass", isDraft: true })).toBe("◌#21288 ✓");
+  test("draft with CI only", () => {
+    expect(tokenLabel({ number: 21288, ci: "pass", review: "none", isDraft: true })).toBe("◌#21288 ✓");
   });
 });
 

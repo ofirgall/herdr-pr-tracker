@@ -152,14 +152,23 @@ export async function fetchInbound(
 export async function fetchBranchPr(
   cwd: string,
   branch: string,
-): Promise<{ number: number; state: string; isDraft: boolean } | null> {
-  const r = await run(["pr", "view", branch, "--json", "number,state,isDraft"], cwd);
-  // No PR for this branch is the ordinary case, not an error worth surfacing.
+): Promise<{
+  number: number;
+  state: string;
+  isDraft: boolean;
+  reviewDecision: string | null;
+} | null> {
+  const r = await run(["pr", "view", branch, "--json", "number,state,isDraft,reviewDecision"], cwd);
   if (!r.ok) return null;
   try {
     const j = JSON.parse(r.out);
     return typeof j?.number === "number"
-      ? { number: j.number, state: String(j.state ?? "OPEN"), isDraft: j.isDraft === true }
+      ? {
+          number: j.number,
+          state: String(j.state ?? "OPEN"),
+          isDraft: j.isDraft === true,
+          reviewDecision: typeof j.reviewDecision === "string" ? j.reviewDecision : null,
+        }
       : null;
   } catch {
     return null;

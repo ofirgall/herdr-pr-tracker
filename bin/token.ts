@@ -1,18 +1,23 @@
 #!/usr/bin/env bun
-// Writes the sidebar `$pr` token for one pane's branch.
-//
-// This is the responsibility inherited from the gh-pr plugin this one replaces:
-// without it, `$pr` in the user's sidebar row config goes blank and replacing
-// gh-pr would be a downgrade.
+// Writes the sidebar `$pr_id` and `$pr_status` tokens for one pane's branch
+// and for every workspace with a worktree.
 
 import { join } from "node:path";
 import { fetchBranchChecks, fetchBranchPr } from "../src/gh.ts";
-import { clearToken, currentPane, listPanes, type PaneInfo, setToken } from "../src/herdr.ts";
+import {
+  clearToken, clearWorkspaceToken, currentPane, listPanes, listWorkspaces,
+  type PaneInfo, setToken, setWorkspaceToken,
+} from "../src/herdr.ts";
 import { loadConfig } from "../src/config.ts";
 import { stateDir } from "../src/state.ts";
-import { refreshingLabel, resolvePaneCwd, rollupBuckets, tokenLabel } from "../src/token.ts";
+import {
+  refreshingLabel, resolvePaneCwd, reviewFromDecision, rollupBuckets,
+  tokenId, tokenStatus, type TokenState,
+} from "../src/token.ts";
 
-const TOKEN = "pr";
+const TOKEN_ID = "pr_id";
+const TOKEN_STATUS = "pr_status";
+const TOKEN_LEGACY = "pr";
 
 /** The pane the hook fired for. Herdr sets HERDR_PANE_ID on pane-scoped hooks;
  * an action invoked from a workspace context has none, so fall back to asking
@@ -30,15 +35,14 @@ async function branchOf(cwd: string): Promise<string | null> {
     stderr: "ignore",
   });
   const [out, code] = await Promise.all([new Response(p.stdout).text(), p.exited]);
-  // A detached HEAD has no branch, so there is no PR to name.
   return code === 0 ? out.trim() || null : null;
 }
 
 /** Per-pane throttle. Focus events fire far more often than a PR's state
  * changes, and every lookup is two `gh` subprocesses. */
-async function throttled(paneId: string, seconds: number): Promise<boolean> {
+async function throttled(key: string, seconds: number): Promise<boolean> {
   if (seconds <= 0) return false;
-  const stamp = join(stateDir(), `throttle-${paneId.replace(/[^\w.-]/g, "_")}`);
+  const stamp = join(stateDir(), `throttle-${key.replace(/[^\w.-]/g, "_")}`);
   try {
     const text = await Bun.file(stamp).text();
     const last = Number.parseInt(text.trim(), 10);
@@ -50,6 +54,71 @@ async function throttled(paneId: string, seconds: number): Promise<boolean> {
   return false;
 }
 
+async function lookupToken(cwd: string, branch: string): Promise<TokenState | null> {
+  const pr = await fetchBranchPr(cwd, branch);
+  if (!pr || pr.state !== "OPEN") return null;
+  const ci = rollupBuckets(await fetchBranchChecks(cwd, branch));
+  const review = reviewFromDecision(pr.reviewDecision);
+  return { number: pr.number, ci, review, isDraft: pr.isDraft };
+}
+
+async function setAllPaneTokens(paneId: string, state: TokenState): Promise<void> {
+  await Promise.all([
+    setToken(paneId, TOKEN_ID, tokenId(state)),
+    setToken(paneId, TOKEN_STATUS, tokenStatus(state)),
+  ]);
+}
+
+async function clearAllPaneTokens(paneId: string): Promise<void> {
+  await Promise.all([
+    clearToken(paneId, TOKEN_ID),
+    clearToken(paneId, TOKEN_STATUS),
+    clearToken(paneId, TOKEN_LEGACY),
+  ]);
+}
+
+async function setAllWorkspaceTokens(wsId: string, state: TokenState): Promise<void> {
+  await Promise.all([
+    setWorkspaceToken(wsId, TOKEN_ID, tokenId(state)),
+    setWorkspaceToken(wsId, TOKEN_STATUS, tokenStatus(state)),
+  ]);
+}
+
+async function clearAllWorkspaceTokens(wsId: string): Promise<void> {
+  await Promise.all([
+    clearWorkspaceToken(wsId, TOKEN_ID),
+    clearWorkspaceToken(wsId, TOKEN_STATUS),
+    clearWorkspaceToken(wsId, TOKEN_LEGACY),
+  ]);
+}
+
+const cfg = await loadConfig(
+  process.env.HERDR_PLUGIN_ROOT ?? ".",
+  process.env.HERDR_PLUGIN_CONFIG_DIR,
+);
+const automatic = Boolean(process.env.HERDR_PLUGIN_EVENT_JSON);
+
+// Workspace-level tokens: set $pr_id and $pr_status on every workspace that
+// has a worktree.
+const workspaces = await listWorkspaces();
+await Promise.all(workspaces.map(async (ws) => {
+  const id = ws.workspace_id;
+  const checkoutPath = ws.worktree?.checkout_path;
+  if (!id || !checkoutPath) return;
+  if (automatic && (await throttled(`ws-${id}`, cfg.tokenThrottleSeconds))) return;
+  const branch = await branchOf(checkoutPath);
+  if (!branch) {
+    await clearAllWorkspaceTokens(id);
+    return;
+  }
+  const state = await lookupToken(checkoutPath, branch);
+  if (!state) {
+    await clearAllWorkspaceTokens(id);
+    return;
+  }
+  await setAllWorkspaceTokens(id, state);
+}));
+
 const pane = await targetPane();
 if (!pane) process.exit(0);
 
@@ -60,35 +129,25 @@ if (!cwd) process.exit(0);
 // shell pane is not worth two gh calls.
 if (!pane.agent) process.exit(0);
 
-const cfg = await loadConfig(
-  process.env.HERDR_PLUGIN_ROOT ?? ".",
-  process.env.HERDR_PLUGIN_CONFIG_DIR,
-);
-// A manual invocation should always do the work; only the automatic hook path
-// is throttled.
-const automatic = Boolean(process.env.HERDR_PLUGIN_EVENT_JSON);
 if (automatic && (await throttled(pane.pane_id, cfg.tokenThrottleSeconds))) {
   process.exit(0);
 }
 
 const branch = await branchOf(cwd);
 if (!branch) {
-  await clearToken(pane.pane_id, TOKEN);
+  await clearAllPaneTokens(pane.pane_id);
   process.exit(0);
 }
 
 // Keep the number visible while the lookup runs, so the sidebar shows work in
 // progress rather than appearing to hang on a stale glyph.
-const pending = refreshingLabel(pane.tokens?.[TOKEN]);
-if (pending) await setToken(pane.pane_id, TOKEN, pending);
+const pending = refreshingLabel(pane.tokens?.[TOKEN_ID]);
+if (pending) await setToken(pane.pane_id, TOKEN_ID, pending);
 
-const pr = await fetchBranchPr(cwd, branch);
-if (!pr || pr.state !== "OPEN") {
-  // A merged or closed PR is not something this plugin tracks, and a stale
-  // `#123 ✓` beside a merged branch is worse than no token at all.
-  await clearToken(pane.pane_id, TOKEN);
+const state = await lookupToken(cwd, branch);
+if (!state) {
+  await clearAllPaneTokens(pane.pane_id);
   process.exit(0);
 }
 
-const ci = rollupBuckets(await fetchBranchChecks(cwd, branch));
-await setToken(pane.pane_id, TOKEN, tokenLabel({ number: pr.number, ci, isDraft: pr.isDraft }));
+await setAllPaneTokens(pane.pane_id, state);

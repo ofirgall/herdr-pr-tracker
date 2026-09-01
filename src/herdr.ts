@@ -115,6 +115,22 @@ export async function clearToken(paneId: string, name: string): Promise<void> {
   ]);
 }
 
+export async function setWorkspaceToken(workspaceId: string, name: string, value: string): Promise<void> {
+  await call([
+    "workspace", "report-metadata", workspaceId,
+    "--source", METADATA_SOURCE,
+    "--token", `${name}=${value}`,
+  ]);
+}
+
+export async function clearWorkspaceToken(workspaceId: string, name: string): Promise<void> {
+  await call([
+    "workspace", "report-metadata", workspaceId,
+    "--source", METADATA_SOURCE,
+    "--clear-token", name,
+  ]);
+}
+
 /**
  * Move the widget pane under a target pane, returning the id it now wears.
  *
