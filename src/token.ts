@@ -56,10 +56,15 @@ const REVIEW_GLYPH: Record<TokenReview, string> = {
 export const REFRESHING = "⟳";
 export const DRAFT = "◌";
 
+export const CONFLICT = "⊘";
+export const THREADS = "⚑";
+
 export interface TokenState {
   number: number;
   ci: TokenCi;
   review: TokenReview;
+  conflict: boolean;
+  unresolved: number;
   isDraft: boolean;
 }
 
@@ -68,11 +73,16 @@ export function tokenId(s: TokenState): string {
   return `${s.isDraft ? DRAFT : ""}#${s.number}`;
 }
 
-/** `✓ ✓` — review glyph then CI glyph, space-separated, trimmed. */
+/** `⊘ ✗ ⚑3 ✓` — conflict, review, threads, CI — same order as the pane. */
 export function tokenStatus(s: TokenState): string {
+  const parts: string[] = [];
+  if (s.conflict) parts.push(CONFLICT);
   const r = REVIEW_GLYPH[s.review];
+  if (r) parts.push(r);
+  if (s.unresolved > 0) parts.push(`${THREADS}${s.unresolved}`);
   const c = CI_GLYPH[s.ci];
-  return [r, c].filter(Boolean).join(" ");
+  if (c) parts.push(c);
+  return parts.join(" ");
 }
 
 /** Legacy combined label: `◌#21288 ✓ ✓`. */

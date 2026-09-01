@@ -149,27 +149,37 @@ export async function fetchInbound(
  * The PR for one branch, for the sidebar token. A separate and much cheaper
  * query than the search: it answers "what is the PR in front of me?".
  */
-export async function fetchBranchPr(
-  cwd: string,
-  branch: string,
-): Promise<{
+export interface BranchPr {
   number: number;
   state: string;
   isDraft: boolean;
   reviewDecision: string | null;
-} | null> {
-  const r = await run(["pr", "view", branch, "--json", "number,state,isDraft,reviewDecision"], cwd);
+  mergeable: string | null;
+  unresolvedThreads: number;
+}
+
+const BRANCH_PR_FIELDS =
+  "number,state,isDraft,reviewDecision,mergeable,reviewThreads";
+
+export async function fetchBranchPr(
+  cwd: string,
+  branch: string,
+): Promise<BranchPr | null> {
+  const r = await run(["pr", "view", branch, "--json", BRANCH_PR_FIELDS], cwd);
   if (!r.ok) return null;
   try {
     const j = JSON.parse(r.out);
-    return typeof j?.number === "number"
-      ? {
-          number: j.number,
-          state: String(j.state ?? "OPEN"),
-          isDraft: j.isDraft === true,
-          reviewDecision: typeof j.reviewDecision === "string" ? j.reviewDecision : null,
-        }
-      : null;
+    if (typeof j?.number !== "number") return null;
+    const threads: Array<{ isResolved?: boolean }> = Array.isArray(j.reviewThreads) ? j.reviewThreads : [];
+    const unresolved = threads.filter((t) => t && t.isResolved === false).length;
+    return {
+      number: j.number,
+      state: String(j.state ?? "OPEN"),
+      isDraft: j.isDraft === true,
+      reviewDecision: typeof j.reviewDecision === "string" ? j.reviewDecision : null,
+      mergeable: typeof j.mergeable === "string" ? j.mergeable : null,
+      unresolvedThreads: unresolved,
+    };
   } catch {
     return null;
   }

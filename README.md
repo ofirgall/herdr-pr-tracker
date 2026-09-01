@@ -184,10 +184,10 @@ workspaces (per-worktree):
 | Token | Example | Meaning |
 |---|---|---|
 | `$pr_id` | `#21288`, `◌#208` | PR number, with `◌` for drafts |
-| `$pr_status` | `✓ ✓`, `✗ ●`, `◆` | Review then CI glyph |
+| `$pr_status` | `✓ ✓`, `⊘ ✗ ⚑3 ✗`, `◆ ●` | All signals: conflict, review, threads, CI |
 
-Review glyphs: `✓` approved, `✗` changes requested, `◆` review required.
-CI glyphs: `✓` passing, `✗` failing, `●` running.
+`⊘` conflict, `✗` changes requested / checks failing, `◆` review required,
+`⚑N` unresolved threads, `●` checks running, `✓` approved / checks passing.
 
 ```toml
 [ui.sidebar.agents]

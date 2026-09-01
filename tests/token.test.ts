@@ -8,7 +8,21 @@ import {
   tokenId,
   tokenLabel,
   tokenStatus,
+  type TokenState,
 } from "../src/token.ts";
+
+const base: TokenState = {
+  number: 1,
+  ci: "none",
+  review: "none",
+  conflict: false,
+  unresolved: 0,
+  isDraft: false,
+};
+
+function tok(overrides: Partial<TokenState>): TokenState {
+  return { ...base, ...overrides };
+}
 
 describe("rollupBuckets", () => {
   test("no checks is not a pass", () => {
@@ -42,40 +56,58 @@ describe("reviewFromDecision", () => {
 
 describe("tokenId", () => {
   test("plain PR", () => {
-    expect(tokenId({ number: 864, ci: "pass", review: "none", isDraft: false })).toBe("#864");
+    expect(tokenId(tok({ number: 864, ci: "pass" }))).toBe("#864");
   });
   test("draft PR", () => {
-    expect(tokenId({ number: 21288, ci: "pass", review: "none", isDraft: true })).toBe("◌#21288");
+    expect(tokenId(tok({ number: 21288, isDraft: true }))).toBe("◌#21288");
   });
 });
 
 describe("tokenStatus", () => {
   test("review and CI", () => {
-    expect(tokenStatus({ number: 1, ci: "pass", review: "approved", isDraft: false })).toBe("✓ ✓");
+    expect(tokenStatus(tok({ ci: "pass", review: "approved" }))).toBe("✓ ✓");
   });
   test("CI only", () => {
-    expect(tokenStatus({ number: 1, ci: "fail", review: "none", isDraft: false })).toBe("✗");
+    expect(tokenStatus(tok({ ci: "fail" }))).toBe("✗");
   });
   test("review only", () => {
-    expect(tokenStatus({ number: 1, ci: "none", review: "changes-requested", isDraft: false })).toBe("✗");
+    expect(tokenStatus(tok({ review: "changes-requested" }))).toBe("✗");
   });
   test("nothing", () => {
-    expect(tokenStatus({ number: 1, ci: "none", review: "none", isDraft: false })).toBe("");
+    expect(tokenStatus(tok({}))).toBe("");
   });
   test("review required and pending", () => {
-    expect(tokenStatus({ number: 1, ci: "pending", review: "review-required", isDraft: false })).toBe("◆ ●");
+    expect(tokenStatus(tok({ ci: "pending", review: "review-required" }))).toBe("◆ ●");
+  });
+  test("conflict leads", () => {
+    expect(tokenStatus(tok({ conflict: true, ci: "fail", review: "changes-requested" }))).toBe("⊘ ✗ ✗");
+  });
+  test("conflict alone", () => {
+    expect(tokenStatus(tok({ conflict: true }))).toBe("⊘");
+  });
+  test("unresolved threads", () => {
+    expect(tokenStatus(tok({ unresolved: 4, ci: "pass" }))).toBe("⚑4 ✓");
+  });
+  test("unresolved threads with review", () => {
+    expect(tokenStatus(tok({ review: "approved", unresolved: 2, ci: "pass" }))).toBe("✓ ⚑2 ✓");
+  });
+  test("all signals", () => {
+    expect(tokenStatus(tok({ conflict: true, review: "changes-requested", unresolved: 3, ci: "fail" }))).toBe("⊘ ✗ ⚑3 ✗");
   });
 });
 
 describe("tokenLabel", () => {
   test("combines id and status", () => {
-    expect(tokenLabel({ number: 864, ci: "pass", review: "approved", isDraft: false })).toBe("#864 ✓ ✓");
+    expect(tokenLabel(tok({ number: 864, ci: "pass", review: "approved" }))).toBe("#864 ✓ ✓");
   });
   test("no status means id only", () => {
-    expect(tokenLabel({ number: 4, ci: "none", review: "none", isDraft: false })).toBe("#4");
+    expect(tokenLabel(tok({ number: 4 }))).toBe("#4");
   });
   test("draft with CI only", () => {
-    expect(tokenLabel({ number: 21288, ci: "pass", review: "none", isDraft: true })).toBe("◌#21288 ✓");
+    expect(tokenLabel(tok({ number: 21288, ci: "pass", isDraft: true }))).toBe("◌#21288 ✓");
+  });
+  test("conflict in combined label", () => {
+    expect(tokenLabel(tok({ number: 100, conflict: true, ci: "fail" }))).toBe("#100 ⊘ ✗");
   });
 });
 

@@ -59,7 +59,14 @@ async function lookupToken(cwd: string, branch: string): Promise<TokenState | nu
   if (!pr || pr.state !== "OPEN") return null;
   const ci = rollupBuckets(await fetchBranchChecks(cwd, branch));
   const review = reviewFromDecision(pr.reviewDecision);
-  return { number: pr.number, ci, review, isDraft: pr.isDraft };
+  return {
+    number: pr.number,
+    ci,
+    review,
+    conflict: pr.mergeable === "CONFLICTING",
+    unresolved: pr.unresolvedThreads,
+    isDraft: pr.isDraft,
+  };
 }
 
 async function setAllPaneTokens(paneId: string, state: TokenState): Promise<void> {
