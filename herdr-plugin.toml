@@ -3,7 +3,7 @@ name = "PR Tracker"
 version = "0.3.0"
 min_herdr_version = "0.8.0"
 description = "Every open pull request you have authored, docked and colour-coded by what needs you."
-platforms = ["macos", "linux"]
+platforms = ["macos", "linux", "windows"]
 
 # Commands are run directly, not through a shell, so bun is invoked explicitly
 # rather than relying on a shebang plus the execute bit.
