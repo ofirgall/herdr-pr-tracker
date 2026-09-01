@@ -196,9 +196,9 @@ active, absent when not — so the sidebar config can assign a fixed color:
 | `$pr_review` | `◆` | `` `nf-fa-eye` | Review required |
 | `$pr_threads` | `⚑N` | `󰅺N` `nf-md-comment_text_outline` | Unresolved review threads |
 | `$pr_approved` | `✓` | `✓` | Approved |
-| `$pr_ci_pass` | `✓` | `` `nf-fa-check` | Checks passing |
-| `$pr_ci_fail` | `✗` | `` `nf-fa-times` | Checks failing |
-| `$pr_ci_run` | `●` | `` `nf-fa-spinner` | Checks running |
+| `$pr_ci_pass` | `✓` | `` `nf-fa-check_circle` | Checks passing |
+| `$pr_ci_fail` | `✗` | `` `nf-oct-x_circle_fill` | Checks failing |
+| `$pr_ci_run` | `●` | `` `nf-cod-loading` | Checks running |
 
 The sidebar uses [Nerd Font](https://www.nerdfonts.com/) icons where available;
 the Unicode column shows the fallback glyph the pane widget uses.

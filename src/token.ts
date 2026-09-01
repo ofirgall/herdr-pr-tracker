@@ -38,9 +38,9 @@ export function reviewFromDecision(decision: string | null): TokenReview {
 }
 
 const CI_GLYPH: Record<TokenCi, string> = {
-  pass: "",
-  fail: "",
-  pending: "",
+  pass: "",
+  fail: "",
+  pending: "",
   none: "",
 };
 
