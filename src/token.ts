@@ -92,6 +92,36 @@ export function tokenLabel(s: TokenState): string {
   return status ? `${id} ${status}` : id;
 }
 
+/**
+ * Per-signal tokens for colored sidebar rendering. Each token is either set to
+ * its glyph or empty, so the sidebar config can assign a fixed color per token.
+ */
+export const SIGNAL_TOKENS = [
+  "pr_conflict",
+  "pr_changes",
+  "pr_review",
+  "pr_threads",
+  "pr_approved",
+  "pr_ci_pass",
+  "pr_ci_fail",
+  "pr_ci_run",
+] as const;
+
+export type SignalTokenName = typeof SIGNAL_TOKENS[number];
+
+export function signalTokens(s: TokenState): Record<SignalTokenName, string> {
+  return {
+    pr_conflict: s.conflict ? CONFLICT : "",
+    pr_changes: s.review === "changes-requested" ? REVIEW_GLYPH["changes-requested"] : "",
+    pr_review: s.review === "review-required" ? REVIEW_GLYPH["review-required"] : "",
+    pr_approved: s.review === "approved" ? REVIEW_GLYPH["approved"] : "",
+    pr_threads: s.unresolved > 0 ? `${THREADS}${s.unresolved}` : "",
+    pr_ci_pass: s.ci === "pass" ? CI_GLYPH["pass"] : "",
+    pr_ci_fail: s.ci === "fail" ? CI_GLYPH["fail"] : "",
+    pr_ci_run: s.ci === "pending" ? CI_GLYPH["pending"] : "",
+  };
+}
+
 /** Keep the number on screen while a refresh runs; only the glyph changes. */
 export function refreshingLabel(previous: string | undefined, isDraft = false): string | null {
   const n = parsePrNumber(previous);

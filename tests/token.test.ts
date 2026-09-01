@@ -5,6 +5,7 @@ import {
   resolvePaneCwd,
   reviewFromDecision,
   rollupBuckets,
+  signalTokens,
   tokenId,
   tokenLabel,
   tokenStatus,
@@ -108,6 +109,73 @@ describe("tokenLabel", () => {
   });
   test("conflict in combined label", () => {
     expect(tokenLabel(tok({ number: 100, conflict: true, ci: "fail" }))).toBe("#100 ⊘ ✗");
+  });
+});
+
+describe("signalTokens", () => {
+  test("all empty when nothing to report", () => {
+    const s = signalTokens(tok({}));
+    expect(s.pr_conflict).toBe("");
+    expect(s.pr_changes).toBe("");
+    expect(s.pr_review).toBe("");
+    expect(s.pr_approved).toBe("");
+    expect(s.pr_threads).toBe("");
+    expect(s.pr_ci_pass).toBe("");
+    expect(s.pr_ci_fail).toBe("");
+    expect(s.pr_ci_run).toBe("");
+  });
+  test("conflict sets only pr_conflict", () => {
+    const s = signalTokens(tok({ conflict: true }));
+    expect(s.pr_conflict).toBe("⊘");
+  });
+  test("approved sets only pr_approved", () => {
+    const s = signalTokens(tok({ review: "approved" }));
+    expect(s.pr_approved).toBe("✓");
+    expect(s.pr_changes).toBe("");
+    expect(s.pr_review).toBe("");
+  });
+  test("changes requested sets only pr_changes", () => {
+    const s = signalTokens(tok({ review: "changes-requested" }));
+    expect(s.pr_changes).toBe("✗");
+    expect(s.pr_approved).toBe("");
+    expect(s.pr_review).toBe("");
+  });
+  test("review required sets only pr_review", () => {
+    const s = signalTokens(tok({ review: "review-required" }));
+    expect(s.pr_review).toBe("◆");
+    expect(s.pr_approved).toBe("");
+    expect(s.pr_changes).toBe("");
+  });
+  test("threads set pr_threads with count", () => {
+    const s = signalTokens(tok({ unresolved: 5 }));
+    expect(s.pr_threads).toBe("⚑5");
+  });
+  test("CI pass", () => {
+    const s = signalTokens(tok({ ci: "pass" }));
+    expect(s.pr_ci_pass).toBe("✓");
+    expect(s.pr_ci_fail).toBe("");
+    expect(s.pr_ci_run).toBe("");
+  });
+  test("CI fail", () => {
+    const s = signalTokens(tok({ ci: "fail" }));
+    expect(s.pr_ci_fail).toBe("✗");
+    expect(s.pr_ci_pass).toBe("");
+  });
+  test("CI pending", () => {
+    const s = signalTokens(tok({ ci: "pending" }));
+    expect(s.pr_ci_run).toBe("●");
+    expect(s.pr_ci_pass).toBe("");
+  });
+  test("all signals at once", () => {
+    const s = signalTokens(tok({ conflict: true, review: "changes-requested", unresolved: 3, ci: "fail" }));
+    expect(s.pr_conflict).toBe("⊘");
+    expect(s.pr_changes).toBe("✗");
+    expect(s.pr_threads).toBe("⚑3");
+    expect(s.pr_ci_fail).toBe("✗");
+    expect(s.pr_approved).toBe("");
+    expect(s.pr_review).toBe("");
+    expect(s.pr_ci_pass).toBe("");
+    expect(s.pr_ci_run).toBe("");
   });
 });
 

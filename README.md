@@ -178,24 +178,43 @@ reopening the pane never shows one view's rows under the other one's heading.
 
 ## The sidebar token
 
-The plugin writes two sidebar tokens on agent panes (per-branch) and on
-workspaces (per-worktree):
+The plugin writes sidebar tokens on agent panes (per-branch) and on workspaces
+(per-worktree). Two composite tokens give a quick uncolored view:
 
 | Token | Example | Meaning |
 |---|---|---|
 | `$pr_id` | `#21288`, `◌#208` | PR number, with `◌` for drafts |
-| `$pr_status` | `✓ ✓`, `⊘ ✗ ⚑3 ✗`, `◆ ●` | All signals: conflict, review, threads, CI |
+| `$pr_status` | `✓ ✓`, `⊘ ✗ ⚑3 ✗`, `◆ ●` | All signals combined |
 
-`⊘` conflict, `✗` changes requested / checks failing, `◆` review required,
-`⚑N` unresolved threads, `●` checks running, `✓` approved / checks passing.
+For colored rendering, each signal has its own token — set to its glyph when
+active, absent when not — so the sidebar config can assign a fixed color:
+
+| Token | Glyph | Signal |
+|---|---|---|
+| `$pr_conflict` | `⊘` | Cannot merge — conflict |
+| `$pr_changes` | `✗` | Changes requested |
+| `$pr_review` | `◆` | Review required |
+| `$pr_threads` | `⚑N` | Unresolved review threads |
+| `$pr_approved` | `✓` | Approved |
+| `$pr_ci_pass` | `✓` | Checks passing |
+| `$pr_ci_fail` | `✗` | Checks failing |
+| `$pr_ci_run` | `●` | Checks running |
 
 ```toml
-[ui.sidebar.agents]
-[ui.sidebar.agents]
-rows = [["state_icon", "workspace", "tab"], ["agent", "$pr_status", "$pr_id"]]
-
 [ui.sidebar.spaces]
-rows = [["state_icon", "$pr_status", "workspace", "$pr_id"],  ["branch", "git_status"]]
+rows = [
+  ["state_icon", "workspace",
+    {token = "$pr_conflict", fg = "#f38ba8", bold = true},
+    {token = "$pr_changes",  fg = "#f38ba8", bold = true},
+    {token = "$pr_ci_fail",  fg = "#f38ba8", bold = true},
+    {token = "$pr_threads",  fg = "#f9e2af", bold = true},
+    {token = "$pr_review",   fg = "#cba6f7"},
+    {token = "$pr_ci_run",   fg = "#89b4fa"},
+    {token = "$pr_approved", fg = "#a6e3a1"},
+    {token = "$pr_ci_pass",  fg = "#a6e3a1"},
+    "$pr_id"],
+  ["branch", "git_status"],
+]
 ```
 
 This replaces the `gh-pr` plugin, which did the same thing.

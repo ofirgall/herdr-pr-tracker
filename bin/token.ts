@@ -12,7 +12,7 @@ import { loadConfig } from "../src/config.ts";
 import { stateDir } from "../src/state.ts";
 import {
   refreshingLabel, resolvePaneCwd, reviewFromDecision, rollupBuckets,
-  tokenId, tokenStatus, type TokenState,
+  SIGNAL_TOKENS, signalTokens, tokenId, tokenStatus, type TokenState,
 } from "../src/token.ts";
 
 const TOKEN_ID = "pr_id";
@@ -70,9 +70,13 @@ async function lookupToken(cwd: string, branch: string): Promise<TokenState | nu
 }
 
 async function setAllPaneTokens(paneId: string, state: TokenState): Promise<void> {
+  const signals = signalTokens(state);
   await Promise.all([
     setToken(paneId, TOKEN_ID, tokenId(state)),
     setToken(paneId, TOKEN_STATUS, tokenStatus(state)),
+    ...SIGNAL_TOKENS.map((name) =>
+      signals[name] ? setToken(paneId, name, signals[name]) : clearToken(paneId, name),
+    ),
   ]);
 }
 
@@ -81,13 +85,18 @@ async function clearAllPaneTokens(paneId: string): Promise<void> {
     clearToken(paneId, TOKEN_ID),
     clearToken(paneId, TOKEN_STATUS),
     clearToken(paneId, TOKEN_LEGACY),
+    ...SIGNAL_TOKENS.map((name) => clearToken(paneId, name)),
   ]);
 }
 
 async function setAllWorkspaceTokens(wsId: string, state: TokenState): Promise<void> {
+  const signals = signalTokens(state);
   await Promise.all([
     setWorkspaceToken(wsId, TOKEN_ID, tokenId(state)),
     setWorkspaceToken(wsId, TOKEN_STATUS, tokenStatus(state)),
+    ...SIGNAL_TOKENS.map((name) =>
+      signals[name] ? setWorkspaceToken(wsId, name, signals[name]) : clearWorkspaceToken(wsId, name),
+    ),
   ]);
 }
 
@@ -96,6 +105,7 @@ async function clearAllWorkspaceTokens(wsId: string): Promise<void> {
     clearWorkspaceToken(wsId, TOKEN_ID),
     clearWorkspaceToken(wsId, TOKEN_STATUS),
     clearWorkspaceToken(wsId, TOKEN_LEGACY),
+    ...SIGNAL_TOKENS.map((name) => clearWorkspaceToken(wsId, name)),
   ]);
 }
 
