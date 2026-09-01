@@ -158,20 +158,24 @@ export interface BranchPr {
   unresolvedThreads: number;
 }
 
-const BRANCH_PR_FIELDS =
-  "number,state,isDraft,reviewDecision,mergeable,reviewThreads";
-
+/**
+ * `gh pr view --json` does not expose `reviewThreads` (it is a GraphQL-only
+ * field), so the basic fields come from the CLI and the thread count is a
+ * separate GraphQL call when we have a PR number.
+ */
 export async function fetchBranchPr(
   cwd: string,
   branch: string,
 ): Promise<BranchPr | null> {
-  const r = await run(["pr", "view", branch, "--json", BRANCH_PR_FIELDS], cwd);
+  const r = await run(
+    ["pr", "view", branch, "--json", "number,state,isDraft,reviewDecision,mergeable"],
+    cwd,
+  );
   if (!r.ok) return null;
   try {
     const j = JSON.parse(r.out);
     if (typeof j?.number !== "number") return null;
-    const threads: Array<{ isResolved?: boolean }> = Array.isArray(j.reviewThreads) ? j.reviewThreads : [];
-    const unresolved = threads.filter((t) => t && t.isResolved === false).length;
+    const unresolved = await fetchUnresolvedThreads(cwd, j.number);
     return {
       number: j.number,
       state: String(j.state ?? "OPEN"),
@@ -182,6 +186,50 @@ export async function fetchBranchPr(
     };
   } catch {
     return null;
+  }
+}
+
+const THREADS_QUERY = `
+query($owner: String!, $repo: String!, $number: Int!) {
+  repository(owner: $owner, name: $repo) {
+    pullRequest(number: $number) {
+      reviewThreads(first: 100) {
+        nodes { isResolved }
+      }
+    }
+  }
+}`;
+
+async function repoOwnerAndName(cwd: string): Promise<{ owner: string; name: string } | null> {
+  const r = await run(["repo", "view", "--json", "owner,name"], cwd);
+  if (!r.ok) return null;
+  try {
+    const j = JSON.parse(r.out);
+    return typeof j?.owner?.login === "string" && typeof j?.name === "string"
+      ? { owner: j.owner.login, name: j.name }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchUnresolvedThreads(cwd: string, prNumber: number): Promise<number> {
+  const repo = await repoOwnerAndName(cwd);
+  if (!repo) return 0;
+  const r = await run([
+    "api", "graphql",
+    "-f", `query=${THREADS_QUERY}`,
+    "-F", `owner=${repo.owner}`,
+    "-F", `repo=${repo.name}`,
+    "-F", `number=${prNumber}`,
+  ], cwd);
+  if (!r.ok) return 0;
+  try {
+    const threads = JSON.parse(r.out)?.data?.repository?.pullRequest?.reviewThreads?.nodes;
+    if (!Array.isArray(threads)) return 0;
+    return threads.filter((t: { isResolved?: boolean }) => t && t.isResolved === false).length;
+  } catch {
+    return 0;
   }
 }
 
