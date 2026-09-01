@@ -35,7 +35,29 @@ async function branchOf(cwd: string): Promise<string | null> {
     stderr: "ignore",
   });
   const [out, code] = await Promise.all([new Response(p.stdout).text(), p.exited]);
-  return code === 0 ? out.trim() || null : null;
+  if (code === 0 && out.trim()) return out.trim();
+  return rebasingBranch(cwd);
+}
+
+async function rebasingBranch(cwd: string): Promise<string | null> {
+  const p = Bun.spawn(["git", "-C", cwd, "rev-parse", "--git-dir"], {
+    stdout: "pipe",
+    stderr: "ignore",
+  });
+  const [out, code] = await Promise.all([new Response(p.stdout).text(), p.exited]);
+  if (code !== 0) return null;
+  const gitDir = out.trim();
+  const resolve = (rel: string) =>
+    gitDir.startsWith("/") ? join(gitDir, rel) : join(cwd, gitDir, rel);
+  for (const sub of ["rebase-merge/head-name", "rebase-apply/head-name"]) {
+    try {
+      const ref = (await Bun.file(resolve(sub)).text()).trim();
+      return ref.replace(/^refs\/heads\//, "") || null;
+    } catch {
+      // Not this kind of rebase.
+    }
+  }
+  return null;
 }
 
 /** Per-pane throttle. Focus events fire far more often than a PR's state
