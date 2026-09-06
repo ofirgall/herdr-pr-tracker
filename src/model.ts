@@ -30,6 +30,7 @@ export type Signal =
   | "review-required"
   | "checks-pending"
   | "approved"
+  | "queued"
   | "merged"
   | "clean";
 
@@ -48,6 +49,7 @@ export const PRECEDENCE: Signal[] = [
   "review-required",
   "checks-pending",
   "approved",
+  "queued",
   "merged",
   "clean",
 ];
@@ -82,6 +84,7 @@ export const INBOUND_PRECEDENCE: Signal[] = [
   "unresolved",
   "checks-failed",
   "approved",
+  "queued",
   "merged",
   "changes-requested",
 ];
@@ -113,6 +116,8 @@ export interface PrRow {
   unresolved: number;
   /** True when reviewThreads hit the page cap, so `unresolved` is a floor. */
   unresolvedCapped: boolean;
+  /** The pull request is in the merge queue. */
+  isQueued: boolean;
   /** The pull request has been merged. */
   isMerged: boolean;
   /** A Herdr workspace is open on this PR's branch. Filled in later by the
@@ -205,6 +210,7 @@ export function rollupChecks(contexts: RawContext[]): CiState {
  * to say carries `clean`. A merged PR carries only `merged` — review and CI
  * states are historical noise once the branch has landed. */
 export function signalsFor(row: PrRow, view: View = DEFAULT_VIEW): Signal[] {
+  if (row.isQueued) return ["queued"];
   if (row.isMerged) return ["merged"];
   const out: Signal[] = [];
   if (row.conflict) out.push("conflict");
@@ -242,6 +248,7 @@ interface RawNode {
   latestOpinionatedReviews?: {
     nodes?: Array<{ state?: string } | null> | null;
   } | null;
+  mergeQueueEntry?: { state?: string } | null;
   author?: { login?: string } | null;
   repository?: { name?: string; owner?: { login?: string } };
   reviewThreads?: {
@@ -316,6 +323,7 @@ function toRow(n: RawNode, threadCap: number): PrRow {
     createdAt: n.createdAt ?? "",
     review: reviewOf(n),
     ci: rollupChecks(contexts ?? []),
+    isQueued: n.mergeQueueEntry != null,
     isMerged: n.state === "MERGED",
     // Only CONFLICTING is a conflict. MERGEABLE, UNKNOWN and a missing field
     // are all "not conflicting" — the lazily-computed UNKNOWN deliberately

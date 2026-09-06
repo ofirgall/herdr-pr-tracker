@@ -170,6 +170,10 @@ describe("merged search", () => {
     expect(SEARCH_QUERY).toContain("state");
   });
 
+  test("SEARCH_QUERY selects the mergeQueueEntry field", () => {
+    expect(SEARCH_QUERY).toContain("mergeQueueEntry");
+  });
+
   test("MERGED_SEARCH asks for merged PRs", () => {
     expect(MERGED_SEARCH).toContain("is:merged");
     expect(MERGED_SEARCH).not.toContain("is:open");

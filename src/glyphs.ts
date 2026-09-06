@@ -34,6 +34,8 @@ export const DRAFT = "◌"; // ◌
  *  to a Nerd Font icon when one is chosen). */
 export const MERGED = ""; // ●
 /** A Herdr workspace is open on this branch. Universal. */
+/** Pull request is in the merge queue. Universal. */
+export const QUEUED = ""; // ▸
 export const LINKED = "▪"; // ▪
 /** Inbound: involved but not asked. Universal. */
 export const INVOLVED = "◦"; // ◦

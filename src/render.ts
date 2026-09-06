@@ -17,6 +17,7 @@ import {
   INVOLVED as INVOLVED_GLYPH,
   LINKED as LINKED_GLYPH,
   MERGED as MERGED_GLYPH,
+  QUEUED as QUEUED_GLYPH,
   RULE,
 } from "./glyphs.ts";
 
@@ -50,6 +51,7 @@ export const SIGNAL_COLOUR: Record<Signal, keyof typeof FG> = {
   "review-required": "magenta",
   "checks-pending": "blue",
   approved: "green",
+  queued: "blue",
   merged: "magenta",
   clean: "default",
 };
@@ -89,7 +91,7 @@ const REVIEW_GLYPH: Record<Exclude<ReviewDecision, null>, string> = {
   REVIEW_REQUIRED: "◆",
 };
 
-export { CONFLICT_GLYPH, DRAFT_GLYPH, ELLIPSIS, INVOLVED_GLYPH, LINKED_GLYPH, MERGED_GLYPH, RULE };
+export { CONFLICT_GLYPH, DRAFT_GLYPH, ELLIPSIS, INVOLVED_GLYPH, LINKED_GLYPH, MERGED_GLYPH, QUEUED_GLYPH, RULE };
 /** Columns before a repo name: workspace marker, draft marker, separator.
  * The header and markers indent to match so everything shares a left edge. */
 export const LEAD_WIDTH = 3;
@@ -552,7 +554,7 @@ function branchLine(
   // the inbound view, which adds the involved mark. Fixed width so identities
   // start on the same column whether or not a row carries any of them, and
   // indented past the repository heading above them.
-  const statusMark = row.isMerged ? MERGED_GLYPH : row.isDraft ? DRAFT_GLYPH : " ";
+  const statusMark = row.isQueued ? QUEUED_GLYPH : row.isMerged ? MERGED_GLYPH : row.isDraft ? DRAFT_GLYPH : " ";
   const lead = `${row.linked ? LINKED_GLYPH : " "}` +
     `${statusMark}` +
     (inbound ? `${row.reason === "involved" ? INVOLVED_GLYPH : " "}` : "") +
@@ -591,7 +593,7 @@ function branchLine(
   // inconsistently. It is also never used in the inbound view, where every row
   // is loud — a list in which everything is emphasised tells you nothing.
   let name = paint(shown, SIGNAL_COLOUR[sig], o.colour);
-  if (o.colour && !inbound && !row.isDraft && !row.isMerged && LOUD.includes(sig)) {
+  if (o.colour && !inbound && !row.isDraft && !row.isQueued && !row.isMerged && LOUD.includes(sig)) {
     name = `${BOLD}${name}${NORMAL}`;
   }
 

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   CONFLICT,
   DRAFT,
+  QUEUED,
   parsePrNumber,
   refreshingLabel,
   resolvePaneCwd,
@@ -22,6 +23,8 @@ const base: TokenState = {
   conflict: false,
   unresolved: 0,
   isDraft: false,
+  isQueued: false,
+  isMerged: false,
 };
 
 function tok(overrides: Partial<TokenState>): TokenState {
@@ -71,6 +74,9 @@ describe("tokenId", () => {
   test("draft PR", () => {
     expect(tokenId(tok({ number: 21288, isDraft: true }))).toBe(`${DRAFT}#21288`);
   });
+  test("queued PR", () => {
+    expect(tokenId(tok({ number: 500, isQueued: true }))).toBe(`${QUEUED}#500`);
+  });
 });
 
 describe("tokenStatus", () => {
@@ -104,6 +110,12 @@ describe("tokenStatus", () => {
   test("all signals", () => {
     expect(tokenStatus(tok({ conflict: true, review: "changes-requested", unresolved: 3, ci: "fail" }))).toBe(`${CONFLICT} ✗ ${THREADS}3 ${CI_FAIL}`);
   });
+  test("queued returns queued", () => {
+    expect(tokenStatus(tok({ isQueued: true }))).toBe("queued");
+  });
+  test("merged returns merged", () => {
+    expect(tokenStatus(tok({ isMerged: true }))).toBe("merged");
+  });
 });
 
 describe("tokenLabel", () => {
@@ -128,6 +140,8 @@ describe("signalTokens", () => {
     expect(s.pr_changes).toBe("");
     expect(s.pr_review).toBe("");
     expect(s.pr_approved).toBe("");
+    expect(s.pr_queued).toBe("");
+    expect(s.pr_merged).toBe("");
     expect(s.pr_threads).toBe("");
     expect(s.pr_ci_pass).toBe("");
     expect(s.pr_ci_fail).toBe("");
@@ -173,6 +187,12 @@ describe("signalTokens", () => {
   test("CI pending", () => {
     const s = signalTokens(tok({ ci: "pending" }));
     expect(s.pr_ci_run).toBe(CI_RUN);
+    expect(s.pr_ci_pass).toBe("");
+  });
+  test("queued sets only pr_queued", () => {
+    const s = signalTokens(tok({ isQueued: true }));
+    expect(s.pr_queued).toBe(QUEUED);
+    expect(s.pr_conflict).toBe("");
     expect(s.pr_ci_pass).toBe("");
   });
   test("all signals at once", () => {

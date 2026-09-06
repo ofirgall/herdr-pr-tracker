@@ -10,6 +10,7 @@ import {
   LINKED_GLYPH,
   LOUD,
   MERGED_GLYPH,
+  QUEUED_GLYPH,
   relativeAge,
   render,
   renderRow,
@@ -666,6 +667,42 @@ describe("notice", () => {
   test("is clipped to the pane width like every other line", () => {
     const out = render(live.rows, opts({ rows: 40, cols: 14, notice: NOTICE }));
     expect(width(out.at(-1)!)).toBeLessThanOrEqual(14);
+  });
+});
+
+describe("queued PRs", () => {
+  const queued = (): PrRow => ({
+    ...pr(100),
+    number: 998,
+    branch: "feat/queued-thing",
+    isQueued: true,
+  });
+
+  test("a queued row carries the queued glyph", () => {
+    const [l1] = renderRow(queued(), opts());
+    expect(plain(l1)).toContain(QUEUED_GLYPH);
+    expect(plain(l1)).not.toContain(DRAFT_GLYPH);
+    expect(plain(l1)).not.toContain(MERGED_GLYPH);
+  });
+
+  test("a queued row is not dim — it is still active", () => {
+    const [l1] = renderRow(queued(), opts());
+    expect(dimThroughout(l1!)).toBe(false);
+  });
+
+  test("a queued row is not bold", () => {
+    expect(renderRow(queued(), opts())[0]).not.toContain(BOLD);
+  });
+
+  test("a queued row is blue", () => {
+    expect(renderRow(queued(), opts())[0]).toContain("\x1b[34m");
+  });
+
+  test("line one is exactly the pane width", () => {
+    for (const cols of [20, 30, 44, 80]) {
+      expect(vis(renderRow(queued(), opts({ cols }))[0])).toBe(cols);
+      expect(vis(compactRow(queued(), opts({ cols })))).toBe(cols);
+    }
   });
 });
 

@@ -11,6 +11,7 @@ import {
   CONFLICT,
   DRAFT,
   MERGED,
+  QUEUED,
   REFRESHING,
   REVIEW_APPROVED,
   REVIEW_CHANGES,
@@ -18,7 +19,7 @@ import {
   THREADS,
 } from "./glyphs.ts";
 
-export { CONFLICT, DRAFT, MERGED, REFRESHING, THREADS };
+export { CONFLICT, DRAFT, MERGED, QUEUED, REFRESHING, THREADS };
 
 /** Buckets `gh pr checks --json bucket` reports. */
 export type Bucket = "pass" | "fail" | "pending" | "skipping" | "cancel";
@@ -74,18 +75,20 @@ export interface TokenState {
   conflict: boolean;
   unresolved: number;
   isDraft: boolean;
+  isQueued: boolean;
   isMerged: boolean;
 }
 
 /** `◌#21288` / `●#21288` — draft/merged marker and number. */
 export function tokenId(s: TokenState): string {
-  const mark = s.isMerged ? MERGED : s.isDraft ? DRAFT : "";
+  const mark = s.isQueued ? QUEUED : s.isMerged ? MERGED : s.isDraft ? DRAFT : "";
   return `${mark}#${s.number}`;
 }
 
 /** `⊘ ✗ ⚑3 ✓` — conflict, review, threads, CI — same order as the pane.
  * A merged PR shows only `merged` — the other signals are historical. */
 export function tokenStatus(s: TokenState): string {
+  if (s.isQueued) return "queued";
   if (s.isMerged) return "merged";
   const parts: string[] = [];
   if (s.conflict) parts.push(CONFLICT);
@@ -114,6 +117,7 @@ export const SIGNAL_TOKENS = [
   "pr_review",
   "pr_threads",
   "pr_approved",
+  "pr_queued",
   "pr_merged",
   "pr_ci_pass",
   "pr_ci_fail",
@@ -128,6 +132,7 @@ export function signalTokens(s: TokenState): Record<SignalTokenName, string> {
     pr_changes: s.review === "changes-requested" ? REVIEW_GLYPH["changes-requested"] : "",
     pr_review: s.review === "review-required" ? REVIEW_GLYPH["review-required"] : "",
     pr_approved: s.review === "approved" ? REVIEW_GLYPH["approved"] : "",
+    pr_queued: s.isQueued ? QUEUED : "",
     pr_merged: s.isMerged ? MERGED : "",
     pr_threads: s.unresolved > 0 ? `${THREADS}${s.unresolved}` : "",
     pr_ci_pass: s.ci === "pass" ? CI_GLYPH["pass"] : "",

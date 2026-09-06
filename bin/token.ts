@@ -81,15 +81,18 @@ async function lookupToken(cwd: string, branch: string): Promise<TokenState | nu
   if (!pr) return null;
   if (pr.state === "CLOSED") return null;
   const merged = pr.state === "MERGED";
-  const ci = merged ? ("none" as const) : rollupBuckets(await fetchBranchChecks(cwd, branch));
-  const review = merged ? ("none" as const) : reviewFromDecision(pr.reviewDecision);
+  const queued = !merged && pr.isQueued;
+  const settled = merged || queued;
+  const ci = settled ? ("none" as const) : rollupBuckets(await fetchBranchChecks(cwd, branch));
+  const review = settled ? ("none" as const) : reviewFromDecision(pr.reviewDecision);
   return {
     number: pr.number,
     ci,
     review,
-    conflict: !merged && pr.mergeable === "CONFLICTING",
-    unresolved: merged ? 0 : pr.unresolvedThreads,
-    isDraft: !merged && pr.isDraft,
+    conflict: !settled && pr.mergeable === "CONFLICTING",
+    unresolved: settled ? 0 : pr.unresolvedThreads,
+    isDraft: !settled && pr.isDraft,
+    isQueued: queued,
     isMerged: merged,
   };
 }

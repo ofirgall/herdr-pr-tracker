@@ -35,6 +35,7 @@ const PR_FIELDS = `
         reviewDecision
         reviewRequests(first: 1) { totalCount }
         latestOpinionatedReviews(first: 20) { nodes { state } }
+        mergeQueueEntry { state }
         author { login }
         repository { name owner { login } }
         reviewThreads(first: $threads) {

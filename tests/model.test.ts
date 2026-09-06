@@ -232,6 +232,21 @@ describe("parseSearch", () => {
   });
 });
 
+describe("queued PRs", () => {
+  test("a node with mergeQueueEntry parses as isQueued", () => {
+    expect(byNumber(125).isQueued).toBe(true);
+  });
+
+  test("a queued PR carries only the queued signal", () => {
+    expect(signalsFor(byNumber(125))).toEqual(["queued"]);
+    expect(headline(byNumber(125))).toBe("queued");
+  });
+
+  test("a PR without mergeQueueEntry is not queued", () => {
+    expect(byNumber(100).isQueued).toBe(false);
+  });
+});
+
 describe("merged PRs", () => {
   test("a node with state MERGED parses as isMerged", () => {
     expect(byNumber(124).isMerged).toBe(true);

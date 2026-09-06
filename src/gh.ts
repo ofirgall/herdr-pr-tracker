@@ -157,6 +157,7 @@ export interface BranchPr {
   reviewDecision: string | null;
   mergeable: string | null;
   unresolvedThreads: number;
+  isQueued: boolean;
 }
 
 /**
@@ -176,14 +177,15 @@ export async function fetchBranchPr(
   try {
     const j = JSON.parse(r.out);
     if (typeof j?.number !== "number") return null;
-    const unresolved = await fetchUnresolvedThreads(cwd, j.number);
+    const extras = await fetchPrExtras(cwd, j.number);
     return {
       number: j.number,
       state: String(j.state ?? "OPEN"),
       isDraft: j.isDraft === true,
       reviewDecision: typeof j.reviewDecision === "string" ? j.reviewDecision : null,
       mergeable: typeof j.mergeable === "string" ? j.mergeable : null,
-      unresolvedThreads: unresolved,
+      unresolvedThreads: extras.unresolvedThreads,
+      isQueued: extras.isQueued,
     };
   } catch {
     return null;
@@ -194,6 +196,7 @@ const THREADS_QUERY = `
 query($owner: String!, $repo: String!, $number: Int!) {
   repository(owner: $owner, name: $repo) {
     pullRequest(number: $number) {
+      mergeQueueEntry { state }
       reviewThreads(first: 100) {
         nodes { isResolved }
       }
@@ -214,9 +217,14 @@ async function repoOwnerAndName(cwd: string): Promise<{ owner: string; name: str
   }
 }
 
-async function fetchUnresolvedThreads(cwd: string, prNumber: number): Promise<number> {
+interface PrExtras {
+  unresolvedThreads: number;
+  isQueued: boolean;
+}
+
+async function fetchPrExtras(cwd: string, prNumber: number): Promise<PrExtras> {
   const repo = await repoOwnerAndName(cwd);
-  if (!repo) return 0;
+  if (!repo) return { unresolvedThreads: 0, isQueued: false };
   const r = await run([
     "api", "graphql",
     "-f", `query=${THREADS_QUERY}`,
@@ -224,13 +232,17 @@ async function fetchUnresolvedThreads(cwd: string, prNumber: number): Promise<nu
     "-F", `repo=${repo.name}`,
     "-F", `number=${prNumber}`,
   ], cwd);
-  if (!r.ok) return 0;
+  if (!r.ok) return { unresolvedThreads: 0, isQueued: false };
   try {
-    const threads = JSON.parse(r.out)?.data?.repository?.pullRequest?.reviewThreads?.nodes;
-    if (!Array.isArray(threads)) return 0;
-    return threads.filter((t: { isResolved?: boolean }) => t && t.isResolved === false).length;
+    const pr = JSON.parse(r.out)?.data?.repository?.pullRequest;
+    const threads = pr?.reviewThreads?.nodes;
+    const unresolvedThreads = Array.isArray(threads)
+      ? threads.filter((t: { isResolved?: boolean }) => t && t.isResolved === false).length
+      : 0;
+    const isQueued = pr?.mergeQueueEntry != null;
+    return { unresolvedThreads, isQueued };
   } catch {
-    return 0;
+    return { unresolvedThreads: 0, isQueued: false };
   }
 }
 
