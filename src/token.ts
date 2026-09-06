@@ -4,6 +4,22 @@
 // in *this* pane?" rather than "what is the state of everything I have open?".
 // Both surfaces use the same glyphs so they can never appear to disagree.
 
+import {
+  CI_FAIL,
+  CI_PASS,
+  CI_PENDING,
+  CONFLICT,
+  DRAFT,
+  MERGED,
+  REFRESHING,
+  REVIEW_APPROVED,
+  REVIEW_CHANGES,
+  REVIEW_REQUIRED as REVIEW_REQUIRED_GLYPH,
+  THREADS,
+} from "./glyphs.ts";
+
+export { CONFLICT, DRAFT, MERGED, REFRESHING, THREADS };
+
 /** Buckets `gh pr checks --json bucket` reports. */
 export type Bucket = "pass" | "fail" | "pending" | "skipping" | "cancel";
 
@@ -38,26 +54,18 @@ export function reviewFromDecision(decision: string | null): TokenReview {
 }
 
 const CI_GLYPH: Record<TokenCi, string> = {
-  pass: "",
-  fail: "",
-  pending: "",
+  pass: CI_PASS,
+  fail: CI_FAIL,
+  pending: CI_PENDING,
   none: "",
 };
 
 const REVIEW_GLYPH: Record<TokenReview, string> = {
-  approved: "✓",
-  "changes-requested": "✗",
-  "review-required": "",
+  approved: REVIEW_APPROVED,
+  "changes-requested": REVIEW_CHANGES,
+  "review-required": REVIEW_REQUIRED_GLYPH,
   none: "",
 };
-
-/** Shown in place of the CI glyph while a lookup is in flight, so the sidebar
- * visibly acknowledges the work instead of appearing stuck. */
-export const REFRESHING = "⟳";
-export const DRAFT = "◌";
-
-export const CONFLICT = "⊘";
-export const THREADS = "\u{F017A}";
 
 export interface TokenState {
   number: number;
@@ -66,15 +74,19 @@ export interface TokenState {
   conflict: boolean;
   unresolved: number;
   isDraft: boolean;
+  isMerged: boolean;
 }
 
-/** `◌#21288` — draft marker and number. */
+/** `◌#21288` / `●#21288` — draft/merged marker and number. */
 export function tokenId(s: TokenState): string {
-  return `${s.isDraft ? DRAFT : ""}#${s.number}`;
+  const mark = s.isMerged ? MERGED : s.isDraft ? DRAFT : "";
+  return `${mark}#${s.number}`;
 }
 
-/** `⊘ ✗ ⚑3 ✓` — conflict, review, threads, CI — same order as the pane. */
+/** `⊘ ✗ ⚑3 ✓` — conflict, review, threads, CI — same order as the pane.
+ * A merged PR shows only `merged` — the other signals are historical. */
 export function tokenStatus(s: TokenState): string {
+  if (s.isMerged) return "merged";
   const parts: string[] = [];
   if (s.conflict) parts.push(CONFLICT);
   const r = REVIEW_GLYPH[s.review];
@@ -102,6 +114,7 @@ export const SIGNAL_TOKENS = [
   "pr_review",
   "pr_threads",
   "pr_approved",
+  "pr_merged",
   "pr_ci_pass",
   "pr_ci_fail",
   "pr_ci_run",
@@ -115,6 +128,7 @@ export function signalTokens(s: TokenState): Record<SignalTokenName, string> {
     pr_changes: s.review === "changes-requested" ? REVIEW_GLYPH["changes-requested"] : "",
     pr_review: s.review === "review-required" ? REVIEW_GLYPH["review-required"] : "",
     pr_approved: s.review === "approved" ? REVIEW_GLYPH["approved"] : "",
+    pr_merged: s.isMerged ? MERGED : "",
     pr_threads: s.unresolved > 0 ? `${THREADS}${s.unresolved}` : "",
     pr_ci_pass: s.ci === "pass" ? CI_GLYPH["pass"] : "",
     pr_ci_fail: s.ci === "fail" ? CI_GLYPH["fail"] : "",

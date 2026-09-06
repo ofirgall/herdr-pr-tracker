@@ -1305,6 +1305,45 @@
               }
             ]
           }
+        },
+        {
+          "number": 124,
+          "title": "Merged pull request",
+          "url": "https://github.com/acme/repo/pull/124",
+          "isDraft": false,
+          "createdAt": "2026-01-25T00:00:00Z",
+          "state": "MERGED",
+          "headRefName": "b124",
+          "reviewDecision": "APPROVED",
+          "repository": {
+            "name": "repo",
+            "owner": {
+              "login": "acme"
+            }
+          },
+          "reviewThreads": {
+            "totalCount": 0,
+            "nodes": []
+          },
+          "commits": {
+            "nodes": [
+              {
+                "commit": {
+                  "statusCheckRollup": {
+                    "contexts": {
+                      "nodes": [
+                        {
+                          "__typename": "CheckRun",
+                          "conclusion": "SUCCESS",
+                          "status": "COMPLETED"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          }
         }
       ]
     },

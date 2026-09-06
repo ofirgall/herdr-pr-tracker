@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   headline,
+  parseAuthored,
   parseSearch,
   PRECEDENCE,
   type PrRow,
@@ -228,5 +229,64 @@ describe("parseSearch", () => {
     expect(list.omitted).toBe(0);
     expect(list.rows.every((r) => r.owner && r.repo && r.url && r.number > 0))
       .toBe(true);
+  });
+});
+
+describe("merged PRs", () => {
+  test("a node with state MERGED parses as isMerged", () => {
+    expect(byNumber(124).isMerged).toBe(true);
+  });
+
+  test("a merged PR carries only the merged signal", () => {
+    expect(signalsFor(byNumber(124))).toEqual(["merged"]);
+    expect(headline(byNumber(124))).toBe("merged");
+  });
+
+  test("an open PR without a state field is not merged", () => {
+    expect(byNumber(100).isMerged).toBe(false);
+  });
+});
+
+describe("parseAuthored", () => {
+  test("combines open and merged searches", () => {
+    const payload = {
+      data: {
+        open: { issueCount: 2, nodes: states.data.search.nodes.slice(0, 2) },
+        merged: { nodes: [states.data.search.nodes.at(-1)] },
+      },
+    };
+    const list = parseAuthored(payload);
+    expect(list.rows).toHaveLength(3);
+    expect(list.rows.at(-1)!.isMerged).toBe(true);
+  });
+
+  test("falls back to data.search for backward compatibility", () => {
+    const list = parseAuthored(states);
+    expect(list.rows.length).toBeGreaterThan(0);
+  });
+
+  test("deduplicates rows by repo and number", () => {
+    const node = states.data.search.nodes[0];
+    const payload = {
+      data: {
+        open: { issueCount: 1, nodes: [node] },
+        merged: { nodes: [node] },
+      },
+    };
+    expect(parseAuthored(payload).rows).toHaveLength(1);
+  });
+
+  test("open rows appear before merged rows", () => {
+    const openNode = states.data.search.nodes[0];
+    const mergedNode = states.data.search.nodes.at(-1);
+    const payload = {
+      data: {
+        open: { issueCount: 1, nodes: [openNode] },
+        merged: { nodes: [mergedNode] },
+      },
+    };
+    const list = parseAuthored(payload);
+    expect(list.rows[0]!.isMerged).toBe(false);
+    expect(list.rows.at(-1)!.isMerged).toBe(true);
   });
 });

@@ -30,6 +30,7 @@ export type Signal =
   | "review-required"
   | "checks-pending"
   | "approved"
+  | "merged"
   | "clean";
 
 /** Loudest-first. The headline colour of a row is the first signal it carries.
@@ -47,6 +48,7 @@ export const PRECEDENCE: Signal[] = [
   "review-required",
   "checks-pending",
   "approved",
+  "merged",
   "clean",
 ];
 
@@ -80,6 +82,7 @@ export const INBOUND_PRECEDENCE: Signal[] = [
   "unresolved",
   "checks-failed",
   "approved",
+  "merged",
   "changes-requested",
 ];
 
@@ -110,6 +113,8 @@ export interface PrRow {
   unresolved: number;
   /** True when reviewThreads hit the page cap, so `unresolved` is a floor. */
   unresolvedCapped: boolean;
+  /** The pull request has been merged. */
+  isMerged: boolean;
   /** A Herdr workspace is open on this PR's branch. Filled in later by the
    * workspace linkage pass; false until then. */
   linked: boolean;
@@ -197,8 +202,10 @@ export function rollupChecks(contexts: RawContext[]): CiState {
 // --- signals ----------------------------------------------------------------
 
 /** Every signal a row carries, loudest first. Never empty: a PR with nothing
- * to say carries `clean`. */
+ * to say carries `clean`. A merged PR carries only `merged` — review and CI
+ * states are historical noise once the branch has landed. */
 export function signalsFor(row: PrRow, view: View = DEFAULT_VIEW): Signal[] {
+  if (row.isMerged) return ["merged"];
   const out: Signal[] = [];
   if (row.conflict) out.push("conflict");
   if (row.review === "CHANGES_REQUESTED") out.push("changes-requested");
@@ -227,6 +234,7 @@ interface RawNode {
   url?: string;
   isDraft?: boolean;
   createdAt?: string;
+  state?: string | null;
   mergeable?: string | null;
   headRefName?: string;
   reviewDecision?: string | null;
@@ -308,6 +316,7 @@ function toRow(n: RawNode, threadCap: number): PrRow {
     createdAt: n.createdAt ?? "",
     review: reviewOf(n),
     ci: rollupChecks(contexts ?? []),
+    isMerged: n.state === "MERGED",
     // Only CONFLICTING is a conflict. MERGEABLE, UNKNOWN and a missing field
     // are all "not conflicting" — the lazily-computed UNKNOWN deliberately
     // reads the same as a clean branch rather than as a warning.
@@ -349,6 +358,44 @@ export function parseSearch(payload: unknown, threadCap = 100): PrList {
     : rows.length;
 
   return { rows, omitted: Math.max(0, issueCount - rows.length) };
+}
+
+/**
+ * Turn the two aliased authored searches (open + merged) into one list.
+ *
+ * Open PRs come first, ordered oldest-created first as before. Merged PRs
+ * follow, ordered newest-first (most recently merged at the top of the merged
+ * section). Duplicates are impossible in practice — a PR is either open or
+ * merged — but deduplicated by key just in case, with the open row winning.
+ */
+export function parseAuthored(payload: unknown, threadCap = 100): PrList {
+  const data = (payload as any)?.data ?? {};
+  const openSearch = data.open ?? data.search ?? {};
+  const mergedSearch = data.merged ?? {};
+
+  const openRows = nodesOf(openSearch)
+    .map((n) => toRow(n, threadCap))
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+
+  const mergedRows = nodesOf(mergedSearch)
+    .map((n) => toRow(n, threadCap))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+  const seen = new Set<string>();
+  const rows: PrRow[] = [];
+  for (const r of [...openRows, ...mergedRows]) {
+    const k = key(r);
+    if (!seen.has(k)) {
+      seen.add(k);
+      rows.push(r);
+    }
+  }
+
+  const issueCount = typeof openSearch.issueCount === "number"
+    ? openSearch.issueCount
+    : openRows.length;
+
+  return { rows, omitted: Math.max(0, issueCount - openRows.length) };
 }
 
 /** A pull request is one row wherever it came from. Repository-qualified,

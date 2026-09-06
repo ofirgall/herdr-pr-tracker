@@ -4,6 +4,8 @@ import {
   INBOUND_QUERY,
   inboundComplete,
   INBOUND_SEARCHES,
+  mergedAfter,
+  MERGED_SEARCH,
   SEARCH_PAGE,
   SEARCH_QUERY,
   withIgnores,
@@ -155,5 +157,27 @@ describe("withIgnores", () => {
     for (const s of INBOUND_SEARCHES) {
       expect(withIgnores(s.q, [...entries])).toContain("-repo:acme/web-app");
     }
+  });
+});
+
+describe("merged search", () => {
+  test("SEARCH_QUERY contains both open and merged aliases", () => {
+    expect(SEARCH_QUERY).toContain("open: search(");
+    expect(SEARCH_QUERY).toContain("merged: search(");
+  });
+
+  test("SEARCH_QUERY selects the state field", () => {
+    expect(SEARCH_QUERY).toContain("state");
+  });
+
+  test("MERGED_SEARCH asks for merged PRs", () => {
+    expect(MERGED_SEARCH).toContain("is:merged");
+    expect(MERGED_SEARCH).not.toContain("is:open");
+  });
+
+  test("mergedAfter returns a date N days before now", () => {
+    const now = Date.parse("2026-09-06T12:00:00Z");
+    expect(mergedAfter(now, 14)).toBe("2026-08-23");
+    expect(mergedAfter(now, 7)).toBe("2026-08-30");
   });
 });

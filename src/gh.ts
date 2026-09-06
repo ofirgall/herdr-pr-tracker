@@ -1,7 +1,7 @@
 // The only module that talks to GitHub. Everything it returns is plain data,
 // so the model and render layers stay testable without a network or a token.
 
-import { parseInbound, parseSearch, type PrList } from "./model.ts";
+import { parseAuthored, parseInbound, parseSearch, type PrList } from "./model.ts";
 import {
   type IgnoreEntry,
   inboundArgs,
@@ -116,11 +116,12 @@ export async function fetchPrs(
   ignore: readonly IgnoreEntry[],
   threads = 100,
 ): Promise<PrList> {
+  const now = Date.now();
   const payload = await graphql(
-    searchArgs(query, maxPrs, ignore, threads),
-    (data) => Boolean(data.search),
+    searchArgs(query, maxPrs, ignore, threads, now),
+    (data) => Boolean(data.open ?? data.search),
   );
-  return parseSearch(payload, threads);
+  return parseAuthored(payload, threads);
 }
 
 /**

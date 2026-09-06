@@ -10,6 +10,15 @@ import {
   type Signal,
 } from "./model.ts";
 import { DEFAULT_VIEW, otherView, SWITCHER_LABELS, type View, viewUrl } from "./view.ts";
+import {
+  CONFLICT as CONFLICT_GLYPH,
+  DRAFT as DRAFT_GLYPH,
+  ELLIPSIS,
+  INVOLVED as INVOLVED_GLYPH,
+  LINKED as LINKED_GLYPH,
+  MERGED as MERGED_GLYPH,
+  RULE,
+} from "./glyphs.ts";
 
 const ESC = "\x1b";
 const DIM = `${ESC}[2m`;
@@ -41,6 +50,7 @@ export const SIGNAL_COLOUR: Record<Signal, keyof typeof FG> = {
   "review-required": "magenta",
   "checks-pending": "blue",
   approved: "green",
+  merged: "magenta",
   clean: "default",
 };
 
@@ -79,25 +89,7 @@ const REVIEW_GLYPH: Record<Exclude<ReviewDecision, null>, string> = {
   REVIEW_REQUIRED: "◆",
 };
 
-/** The head cannot be merged into the base without a manual resolution.
- * Circle-based like `◌`/`◦`/`◆` rather than another cross: `✗` already means
- * two different things in this cluster (a review and a build), and a third
- * would make the column the only thing telling them apart. `⇄` was unavailable
- * — the narrow switcher label already owns it. */
-export const CONFLICT_GLYPH = "⊘";
-
-/** Marks a PR that has a live Herdr workspace open on its branch. */
-export const LINKED_GLYPH = "▪";
-export const DRAFT_GLYPH = "◌";
-/** Marks an inbound row nobody asked you to look at — assigned, mentioned, or
- * you left a comment. Silent for a reviewer row, which is the ordinary reason
- * to be in the view. Geometric like the rest of the set, and paired with `▪`
- * on purpose: it is the same shape, hollow. */
-export const INVOLVED_GLYPH = "◦";
-export const ELLIPSIS = "…";
-/** The dim filler that carries a repository heading out to the right edge, so
- * a group reads as a band rather than as one more line of text. */
-export const RULE = "─";
+export { CONFLICT_GLYPH, DRAFT_GLYPH, ELLIPSIS, INVOLVED_GLYPH, LINKED_GLYPH, MERGED_GLYPH, RULE };
 /** Columns before a repo name: workspace marker, draft marker, separator.
  * The header and markers indent to match so everything shares a left edge. */
 export const LEAD_WIDTH = 3;
@@ -429,7 +421,9 @@ export function header(rows: PrRow[], o: RenderOpts): string {
   // of them can never have something else as its headline. tests/render.test.ts
   // asserts that prefix, because this count is silently wrong the moment LOUD
   // and PRECEDENCE disagree.
-  const total = rows.length + (o.omitted ?? 0);
+  const openRows = rows.filter((r) => !r.isMerged);
+  const mergedCount = rows.filter((r) => r.isMerged).length;
+  const total = openRows.length + (o.omitted ?? 0);
   // The inbound view names itself, because an empty list is otherwise the same
   // picture in both views, and drops the needs-you count: every row in it needs
   // you by definition, so the number is no information.
@@ -437,8 +431,10 @@ export function header(rows: PrRow[], o: RenderOpts): string {
   if (o.view === "inbound") {
     summary = `${total} inbound`;
   } else {
-    const loud = rows.filter((r) => LOUD.includes(headline(r, o.view))).length;
-    summary = `${total} open` + (loud > 0 ? ` · ${loud} need you` : "");
+    const loud = openRows.filter((r) => LOUD.includes(headline(r, o.view))).length;
+    summary = `${total} open`;
+    if (mergedCount > 0) summary += ` · ${mergedCount} merged`;
+    if (loud > 0) summary += ` · ${loud} need you`;
   }
 
   // Split where the switcher goes: after what the pane is showing, before how
@@ -552,12 +548,13 @@ function branchLine(
   const sig = headline(row, o.view);
   const { plain, painted } = cluster(row, o.colour);
 
-  // Three columns: workspace marker, draft marker, separator — four in the
-  // inbound view, which adds the involved mark. Fixed width so identities start
-  // on the same column whether or not a row carries any of them, and indented
-  // past the repository heading above them.
+  // Three columns: workspace marker, draft/merged marker, separator — four in
+  // the inbound view, which adds the involved mark. Fixed width so identities
+  // start on the same column whether or not a row carries any of them, and
+  // indented past the repository heading above them.
+  const statusMark = row.isMerged ? MERGED_GLYPH : row.isDraft ? DRAFT_GLYPH : " ";
   const lead = `${row.linked ? LINKED_GLYPH : " "}` +
-    `${row.isDraft ? DRAFT_GLYPH : " "}` +
+    `${statusMark}` +
     (inbound ? `${row.reason === "involved" ? INVOLVED_GLYPH : " "}` : "") +
     " ";
 
@@ -589,12 +586,12 @@ function branchLine(
     t.plain.length > 0 && width(shown) + width(t.plain) <= room
   );
 
-  // Bold is reserved for the loud signals, and never for a draft: the row is
-  // already dim as a whole, and bold-inside-dim renders inconsistently. It is
-  // also never used in the inbound view, where every row is loud — a list in
-  // which everything is emphasised tells you nothing.
+  // Bold is reserved for the loud signals, and never for a draft or merged
+  // row: both are already dim as a whole, and bold-inside-dim renders
+  // inconsistently. It is also never used in the inbound view, where every row
+  // is loud — a list in which everything is emphasised tells you nothing.
   let name = paint(shown, SIGNAL_COLOUR[sig], o.colour);
-  if (o.colour && !inbound && !row.isDraft && LOUD.includes(sig)) {
+  if (o.colour && !inbound && !row.isDraft && !row.isMerged && LOUD.includes(sig)) {
     name = `${BOLD}${name}${NORMAL}`;
   }
 
@@ -604,19 +601,19 @@ function branchLine(
   return `${lead}${o.compact ? link(row.url, body, true) : body}${gap}${painted}`;
 }
 
-/** Dim a whole row: a draft is dim including its glyphs, so a draft with
- * failing checks still shows the failure rather than hiding it behind grey.
+/** Dim a whole row: a draft or merged PR is dim including its glyphs, so a
+ * draft with failing checks still shows the failure rather than hiding it
+ * behind grey, and a merged PR reads as settled.
  *
  * SGR intensity does not nest — there is no "pop one level", only 22, which
  * ends dim outright. So an inner terminator inside the line (the dim PR
  * number a compact row carries) would end the row's dim at that point and
  * leave the status cluster after it at full brightness. Re-opening dim after
  * every inner terminator is what makes the whole row dim again. */
-function draftDim(lines: string[], row: PrRow, o: RenderOpts): string[] {
-  if (!row.isDraft || !o.colour) return lines;
+function rowDim(lines: string[], row: PrRow, o: RenderOpts): string[] {
+  if ((!row.isDraft && !row.isMerged) || !o.colour) return lines;
   return lines.map((l) => {
     const body = l.replaceAll(NORMAL, `${NORMAL}${DIM}`);
-    // A terminator at the very end re-opens dim over nothing; drop it.
     const tidy = body.endsWith(DIM) ? body.slice(0, -DIM.length) : body;
     return `${DIM}${tidy}${NORMAL}`;
   });
@@ -643,7 +640,7 @@ export function renderRow(row: PrRow, o: RenderOpts): [string, string] {
       dim(stamp, o.colour);
   }
 
-  const [a, b] = draftDim([line1, line2], row, o);
+  const [a, b] = rowDim([line1, line2], row, o);
   return [a!, b!];
 }
 
@@ -664,7 +661,7 @@ export function compactRow(row: PrRow, o: RenderOpts): string {
   const cell = (t: string) => ({ plain: t, painted: dim(t, o.colour) });
   const line = branchLine(row, { ...o, compact: true },
     both === num ? [cell(num)] : [cell(both), cell(num)]);
-  return draftDim([line], row, o)[0]!;
+  return rowDim([line], row, o)[0]!;
 }
 
 /**

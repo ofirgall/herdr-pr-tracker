@@ -29,6 +29,7 @@ const PR_FIELDS = `
         url
         isDraft
         createdAt
+        state
         mergeable
         headRefName
         reviewDecision
@@ -58,17 +59,27 @@ const PR_FIELDS = `
         }
       }`;
 
-/** The authored view: one search, one point. */
+/** The authored view: two searches — open and recently merged — in one
+ * request, so the cost is two points rather than two round trips. */
 export const SEARCH_QUERY = `
-query($q: String!, $prs: Int!, $threads: Int!) {
-  search(query: $q, type: ISSUE, first: $prs) {
+query($q: String!, $merged: String!, $prs: Int!, $mergedPrs: Int!, $threads: Int!) {
+  open: search(query: $q, type: ISSUE, first: $prs) {
     issueCount
+    nodes {${PR_FIELDS}
+    }
+  }
+  merged: search(query: $merged, type: ISSUE, first: $mergedPrs) {
     nodes {${PR_FIELDS}
     }
   }
   rateLimit { cost remaining }
 }
 `;
+
+/** The maximum number of recently merged PRs to fetch. Small on purpose:
+ * merged PRs are done work and exist to confirm a merge landed, not to fill
+ * the list. */
+export const MERGED_PAGE = 20;
 
 /** Why a pull request is in the inbound view. Exclusive: a row has exactly one,
  * the stronger claim winning. See CONTEXT.md. */
@@ -146,6 +157,21 @@ ${
 // them would break the meaning of the glyph with no way to notice.
 export const DEFAULT_SEARCH = "is:pr is:open author:@me archived:false";
 
+/** The merged counterpart of DEFAULT_SEARCH. Not user-overridable: the merged
+ * section is a fixed addition to whatever the open search finds.
+ * `sort:updated` puts the most recently merged first, so the cap drops the
+ * stalest ones. */
+export const MERGED_SEARCH = "is:pr is:merged author:@me archived:false sort:updated";
+
+/**
+ * An ISO date string N days ago, for bounding the merged search.
+ *
+ * Pure — takes `now` so the call site controls the clock.
+ */
+export function mergedAfter(now: number, days = 14): string {
+  return new Date(now - days * 86_400_000).toISOString().slice(0, 10);
+}
+
 // --- ignoring ---------------------------------------------------------------
 
 /**
@@ -198,20 +224,26 @@ export function withIgnores(q: string, entries: readonly IgnoreEntry[]): string 
 // and a view added without `withIgnores` fails a test that reads the arguments
 // GitHub would actually receive.
 
-/** The authored view's request: one document, one search. */
+/** The authored view's request: one document, two aliased searches. */
 export function searchArgs(
   query: string,
   maxPrs: number,
   ignore: readonly IgnoreEntry[],
   threads: number,
+  now: number = Date.now(),
 ): string[] {
+  const mergedQ = `${MERGED_SEARCH} merged:>${mergedAfter(now)}`;
   return [
     "-f",
     `query=${SEARCH_QUERY}`,
     "-F",
     `q=${withIgnores(query, ignore)}`,
     "-F",
+    `merged=${withIgnores(mergedQ, ignore)}`,
+    "-F",
     `prs=${maxPrs}`,
+    "-F",
+    `mergedPrs=${MERGED_PAGE}`,
     "-F",
     `threads=${threads}`,
   ];

@@ -45,15 +45,16 @@ describe("the ignore list reaches every search", () => {
   ];
   const SUBTRACTED = ["-repo:acme/web-app", "-user:initech"];
 
-  // Three of the variables in a request are not searches: the GraphQL document
-  // itself, the page size and the thread cap. Everything else is a query going
-  // to GitHub. Listing the exceptions rather than the searches is the point — a
-  // fourth search under any name is a search until this set says otherwise.
-  const NOT_A_SEARCH = new Set(["query", "prs", "threads"]);
+  // Variables that are not searches: the GraphQL document itself, page sizes
+  // and the thread cap. Everything else is a query going to GitHub. Listing the
+  // exceptions rather than the searches is the point — a new search under any
+  // name is a search until this set says otherwise.
+  const NOT_A_SEARCH_COMMON = new Set(["query", "prs", "threads"]);
+  const NOT_A_SEARCH_AUTHORED = new Set([...NOT_A_SEARCH_COMMON, "mergedPrs"]);
 
   /** The `name=value` pairs in a `gh api graphql` argument list, split into the
    * searches and the rest. */
-  const variables = (args: string[]) => {
+  const variables = (args: string[], exempt: Set<string>) => {
     const all: Array<{ name: string; value: string }> = [];
     for (let i = 0; i < args.length; i += 2) {
       expect(["-f", "-F"]).toContain(args[i]!);
@@ -62,25 +63,25 @@ describe("the ignore list reaches every search", () => {
       expect(eq).toBeGreaterThan(0);
       all.push({ name: pair.slice(0, eq), value: pair.slice(eq + 1) });
     }
-    return { all, searches: all.filter((v) => !NOT_A_SEARCH.has(v.name)) };
+    return { all, searches: all.filter((v) => !exempt.has(v.name)) };
   };
 
-  const REQUESTS: Array<[string, string[], number]> = [
-    ["authored", searchArgs("is:pr is:open author:@me", 100, IGNORED, 100), 1],
-    ["inbound", inboundArgs(IGNORED, 100), 3],
+  const REQUESTS: Array<[string, string[], number, Set<string>]> = [
+    ["authored", searchArgs("is:pr is:open author:@me", 100, IGNORED, 100), 2, NOT_A_SEARCH_AUTHORED],
+    ["inbound", inboundArgs(IGNORED, 100), 3, NOT_A_SEARCH_COMMON],
   ];
 
-  test.each(REQUESTS)("the %s request names the non-searches it exempts", (_n, args) => {
+  test.each(REQUESTS)("the %s request names the non-searches it exempts", (_n, args, _c, exempt) => {
     // So a renamed `prs`/`threads` shows up as a new search rather than quietly
     // joining the exempt set.
-    const { all } = variables(args);
-    for (const name of NOT_A_SEARCH) {
+    const { all } = variables(args as string[], exempt as Set<string>);
+    for (const name of exempt as Set<string>) {
       expect(all.some((v) => v.name === name)).toBe(true);
     }
   });
 
-  test.each(REQUESTS)("every %s search is sent with the ignore list subtracted", (_n, args, count) => {
-    const { searches } = variables(args);
+  test.each(REQUESTS)("every %s search is sent with the ignore list subtracted", (_n, args, count, exempt) => {
+    const { searches } = variables(args as string[], exempt as Set<string>);
     expect(searches.length).toBe(count);
     for (const s of searches) {
       for (const q of SUBTRACTED) expect(s.value).toContain(q);
@@ -88,8 +89,11 @@ describe("the ignore list reaches every search", () => {
   });
 
   test("an empty ignore list subtracts nothing", () => {
-    for (const args of [searchArgs("is:pr is:open author:@me", 100, [], 100), inboundArgs([], 100)]) {
-      for (const s of variables(args).searches) {
+    for (const [args, exempt] of [
+      [searchArgs("is:pr is:open author:@me", 100, [], 100), NOT_A_SEARCH_AUTHORED],
+      [inboundArgs([], 100), NOT_A_SEARCH_COMMON],
+    ] as const) {
+      for (const s of variables(args as string[], exempt as Set<string>).searches) {
         expect(s.value).not.toContain("-repo:");
         expect(s.value).not.toContain("-user:");
       }

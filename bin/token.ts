@@ -78,16 +78,19 @@ async function throttled(key: string, seconds: number): Promise<boolean> {
 
 async function lookupToken(cwd: string, branch: string): Promise<TokenState | null> {
   const pr = await fetchBranchPr(cwd, branch);
-  if (!pr || pr.state !== "OPEN") return null;
-  const ci = rollupBuckets(await fetchBranchChecks(cwd, branch));
-  const review = reviewFromDecision(pr.reviewDecision);
+  if (!pr) return null;
+  if (pr.state === "CLOSED") return null;
+  const merged = pr.state === "MERGED";
+  const ci = merged ? ("none" as const) : rollupBuckets(await fetchBranchChecks(cwd, branch));
+  const review = merged ? ("none" as const) : reviewFromDecision(pr.reviewDecision);
   return {
     number: pr.number,
     ci,
     review,
-    conflict: pr.mergeable === "CONFLICTING",
-    unresolved: pr.unresolvedThreads,
-    isDraft: pr.isDraft,
+    conflict: !merged && pr.mergeable === "CONFLICTING",
+    unresolved: merged ? 0 : pr.unresolvedThreads,
+    isDraft: !merged && pr.isDraft,
+    isMerged: merged,
   };
 }
 

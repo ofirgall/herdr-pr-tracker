@@ -9,6 +9,7 @@ import {
   header,
   LINKED_GLYPH,
   LOUD,
+  MERGED_GLYPH,
   relativeAge,
   render,
   renderRow,
@@ -284,12 +285,15 @@ describe("header", () => {
   });
 
   test("counts the open PRs, and the ones that are yours to act on", () => {
-    const h = header(states.rows, opts({ cols: 60 }));
-    const loud = states.rows.filter((r) =>
+    const h = header(states.rows, opts({ cols: 80 }));
+    const openRows = states.rows.filter((r) => !r.isMerged);
+    const mergedRows = states.rows.filter((r) => r.isMerged);
+    const loud = openRows.filter((r) =>
       r.conflict || r.review === "CHANGES_REQUESTED" || r.ci === "fail" ||
       r.unresolved > 0
     ).length;
-    expect(h).toContain(`${states.rows.length} open`);
+    expect(h).toContain(`${openRows.length} open`);
+    if (mergedRows.length > 0) expect(h).toContain(`${mergedRows.length} merged`);
     expect(h).toContain(`${loud} need you`);
   });
 
@@ -662,5 +666,57 @@ describe("notice", () => {
   test("is clipped to the pane width like every other line", () => {
     const out = render(live.rows, opts({ rows: 40, cols: 14, notice: NOTICE }));
     expect(width(out.at(-1)!)).toBeLessThanOrEqual(14);
+  });
+});
+
+describe("merged PRs", () => {
+  const merged = (): PrRow => ({
+    ...pr(100),
+    number: 999,
+    branch: "feat/merged-thing",
+    isMerged: true,
+  });
+
+  test("a merged row carries the merged glyph instead of the draft glyph", () => {
+    const [l1] = renderRow(merged(), opts());
+    expect(plain(l1)).toContain(MERGED_GLYPH);
+    expect(plain(l1)).not.toContain(DRAFT_GLYPH);
+  });
+
+  test("a merged row is dim throughout, like a draft", () => {
+    const [l1, l2] = renderRow(merged(), opts());
+    expect(dimThroughout(l1!)).toBe(true);
+    expect(dimThroughout(l2!)).toBe(true);
+  });
+
+  test("a merged row is not bold even though its colour is set", () => {
+    expect(renderRow(merged(), opts())[0]).not.toContain(BOLD);
+  });
+
+  test("a merged row is magenta", () => {
+    expect(renderRow(merged(), opts())[0]).toContain("\x1b[35m");
+  });
+
+  test("a compact merged row is dim", () => {
+    expect(dimThroughout(compactRow(merged(), opts()))).toBe(true);
+  });
+
+  test("the header counts open and merged separately", () => {
+    const rows = [pr(100), merged()];
+    const h = header(rows, opts({ cols: 80 }));
+    expect(h).toContain("1 open");
+    expect(h).toContain("1 merged");
+  });
+
+  test("the header omits the merged count when there are none", () => {
+    const h = header([pr(100)], opts({ cols: 80 }));
+    expect(h).not.toContain("merged");
+  });
+
+  test("line one is exactly the pane width", () => {
+    for (const cols of [20, 30, 44, 80]) {
+      expect(vis(renderRow(merged(), opts({ cols }))[0])).toBe(cols);
+      expect(vis(compactRow(merged(), opts({ cols })))).toBe(cols);
+    }
   });
 });
