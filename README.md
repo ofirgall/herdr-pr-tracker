@@ -1,8 +1,9 @@
 # herdr-pr-tracker
 
 A [Herdr](https://herdr.dev) plugin that keeps a list of **every open pull
-request you have authored** and your **recently merged** ones, across every
-repository you can see, docked on the right of whatever tab you are looking at.
+request you have authored** — including those **queued in a merge queue** — and
+your **recently merged** ones, across every repository you can see, docked on the
+right of whatever tab you are looking at.
 
 It answers one question: *what is the state of everything I have open?* — and it
 only tracks. It never opens, closes, merges or comments on anything.
@@ -29,6 +30,8 @@ metrics-service ─────────────────────�
     #208 Split the settings page into ta… 2h
  ◌ chore/nightly-import                    ✓
     #412 Move the nightly import behind … 1h
+ ▸ feat/webhook-backoff               ✓     ✓
+    #410 Backoff on repeated webhook fai… 1h
  ● feat/api-rate-limit               ✓     ✓
     #399 Add rate limiting to the public… 5d
 ```
@@ -51,6 +54,7 @@ opens in your browser.
 | `✓` in the review column | Approved | green |
 | `✓` in the check column | Checks passing | green |
 | `◌` | Draft — dims the whole row | dim |
+| `▸` in the lead column | In the merge queue — on autopilot | blue |
 | `●` in the lead column | Merged — dims the whole row | magenta |
 | **bold** branch | *My PRs only* — a conflict, changes requested, failing checks or unresolved threads: the four that are yours to act on | — |
 | `▪` | A Herdr workspace is open on this branch | dim |
@@ -62,9 +66,9 @@ opens in your browser.
 A pull request can carry several of these at once, so each is drawn separately —
 nothing is hidden by something louder. The row's own colour is the loudest one it
 carries, in this order: conflict, changes requested, failing checks, unresolved
-threads, review required, checks running, approved, merged, clean. A merged pull
-request carries only the merged signal — review and CI states are historical
-noise once the branch has landed.
+threads, review required, checks running, approved, queued, merged, clean. A
+queued or merged pull request carries only its own signal — review and CI states
+are suppressed, since the PR is either on autopilot or already landed.
 
 Some deliberate choices worth knowing:
 
@@ -96,6 +100,10 @@ Some deliberate choices worth knowing:
   misleading.
 - **A draft is dimmed, not greyed out.** A draft with failing checks still shows
   the failure, in dim red.
+- **A PR in the merge queue is blue with `▸`.** Once a pull request enters a
+  merge queue it is on autopilot: review, CI and conflict signals are suppressed
+  because only the queue's own checks matter now. The row is not dimmed — it is
+  still active work, just no longer yours to push forward.
 - **Recently merged pull requests appear after the open ones.** The last 14 days
   of merged work, capped at 20 rows, dimmed like drafts — so "did that merge?"
   is answerable from the same list. Their review and CI signals are suppressed,
@@ -164,9 +172,9 @@ reason — the work is somebody else's:
 - **`◦` marks a row nobody asked you to look at** — you were assigned,
   mentioned, or you left a comment. A row with no mark is one where your review
   was actually requested, which is the ordinary reason to be here.
-- **The colour order nearly inverts below the first place** — the same nine
+- **The colour order nearly inverts below the first place** — the same ten
   signals, ranked again: conflict, review required, checks running, clean,
-  unresolved threads, failing checks, approved, merged, changes requested. *Conflict*
+  unresolved threads, failing checks, approved, queued, merged, changes requested. *Conflict*
   still leads, and it is the only signal that leads both views: to a reviewer a
   conflicting pull request is not *reviewable*, so "do not read this yet" is the
   loudest thing the row can say. *Review required* leads the rest, because it is
@@ -193,8 +201,8 @@ The plugin writes sidebar tokens on agent panes (per-branch) and on workspaces
 
 | Token | Example | Meaning |
 |---|---|---|
-| `$pr_id` | `#21288`, `◌#208`, `●#399` | PR number, with `◌` for drafts and `●` for merged |
-| `$pr_status` | `✓ ✓`, `⊘ ✗ ⚑3 ✗`, `◆ ●`, `merged` | All signals combined |
+| `$pr_id` | `#21288`, `◌#208`, `▸#410`, `●#399` | PR number, with `◌` for drafts, `▸` for queued, `●` for merged |
+| `$pr_status` | `✓ ✓`, `⊘ ✗ ⚑3 ✗`, `◆ ●`, `queued`, `merged` | All signals combined |
 
 For colored rendering, each signal has its own token — set to its glyph when
 active, absent when not — so the sidebar config can assign a fixed color:
@@ -206,6 +214,7 @@ active, absent when not — so the sidebar config can assign a fixed color:
 | `$pr_review` | `◆` | `` `nf-fa-eye` | Review required |
 | `$pr_threads` | `⚑N` | `󰅺N` `nf-md-comment_text_outline` | Unresolved review threads |
 | `$pr_approved` | `✓` | `✓` | Approved |
+| `$pr_queued` | `▸` | `▸` | In the merge queue |
 | `$pr_merged` | `●` | `●` | Merged |
 | `$pr_ci_pass` | `✓` | `` `nf-fa-check_circle` | Checks passing |
 | `$pr_ci_fail` | `✗` | `` `nf-oct-x_circle_fill` | Checks failing |
@@ -224,6 +233,7 @@ rows = [
     {token = "$pr_threads",  fg = "#f9e2af", bold = true},
     {token = "$pr_review",   fg = "#cba6f7"},
     {token = "$pr_merged",   fg = "#cba6f7"},
+    {token = "$pr_queued",   fg = "#89b4fa"},
     {token = "$pr_ci_run",   fg = "#89b4fa"},
     {token = "$pr_approved", fg = "#a6e3a1"},
     {token = "$pr_ci_pass",  fg = "#a6e3a1"},
@@ -446,7 +456,9 @@ watching.
 
 The widget's design turns on two distinctions: **draft is a modifier on open,
 not an alternative to it** — a draft is still open, still yours, and still needs
-you, so it is dimmed rather than dropped — and **merged is a conclusion, not a
-signal** — a merged pull request carries only the `merged` signal, because review
-and CI states are historical noise once the branch has landed, so it is dimmed
-and its status cluster is silent.
+you, so it is dimmed rather than dropped — **queued is autopilot, not a signal**
+— a PR in the merge queue carries only the `queued` signal, because the queue's
+own checks are what matter now — and **merged is a conclusion, not a signal** — a
+merged pull request carries only the `merged` signal, because review and CI states
+are historical noise once the branch has landed, so it is dimmed and its status
+cluster is silent.
