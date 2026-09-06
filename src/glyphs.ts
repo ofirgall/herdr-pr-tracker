@@ -32,7 +32,7 @@ export const CONFLICT = "⊘"; // ⊘
 export const DRAFT = "◌"; // ◌
 /** Merged pull request. Universal (placeholder — set the codepoint below
  *  to a Nerd Font icon when one is chosen). */
-export const MERGED = ""; // ●
+export const MERGED = ""; // ●
 /** A Herdr workspace is open on this branch. Universal. */
 export const LINKED = "▪"; // ▪
 /** Inbound: involved but not asked. Universal. */
