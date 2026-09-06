@@ -267,8 +267,11 @@ export function hitAt(targets: HitTarget[], row: number, col: number): HitTarget
  * Returns the plain glyphs and their painted form separately, because the
  * caller needs the visible width to lay out the line. */
 function cluster(row: PrRow, colour: boolean): { plain: string; painted: string } {
-  const flag = row.unresolved > 0
-    ? `⚑${row.unresolvedCapped ? "99+" : String(row.unresolved)}`
+  const hasHuman = row.unresolvedHuman > 0;
+  const hasBot = row.unresolvedBot > 0;
+  const flagCount = hasHuman ? row.unresolvedHuman : row.unresolvedBot;
+  const flag = (hasHuman || hasBot)
+    ? `${hasHuman ? "⚑" : "⚐"}${row.unresolvedCapped ? "99+" : String(flagCount)}`
     : "";
   // 4 columns holds ⚑ plus a three-digit count or the 99+ floor.
   const flagCell = flag.padEnd(4, " ");
@@ -313,7 +316,7 @@ function cluster(row: PrRow, colour: boolean): { plain: string; painted: string 
   // "default" — `paint` returns an uncoloured string unwrapped.
   const painted = `${paint(conflictCell, row.conflict ? "red" : "default", true)} ` +
     `${paint(reviewCell, reviewColour, true)} ` +
-    `${flag ? paint(flagCell, "yellow", true) : flagCell}` +
+    `${flag ? paint(flagCell, row.unresolvedHuman > 0 ? "yellow" : "blue", true) : flagCell}` +
     `${paint(ciCell, ciColour, true)}`;
   return { plain, painted };
 }

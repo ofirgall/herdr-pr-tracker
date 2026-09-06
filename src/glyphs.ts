@@ -21,8 +21,10 @@ export const CI_PASS = ""; //
 export const CI_FAIL = ""; //
 /** CI: still running. nf-cod-loading */
 export const CI_PENDING = ""; //
-/** Unresolved review threads. nf-md-comment_text_outline */
+/** Unresolved review threads by a human. nf-md-comment_text_outline */
 export const THREADS = "󰅺"; // 󰅺
+/** Unresolved review threads by a bot. nf-md-robot_outline */
+export const BOT_THREADS = "󰚩"; // 󰚩
 
 // --- row markers (pane lead column) ----------------------------------------
 

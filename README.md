@@ -48,7 +48,8 @@ opens in your browser.
 | `⊘` | Cannot be merged without resolving a conflict | red |
 | `✗` in the review column | Changes requested | red |
 | `✗` in the check column | Checks failing | red |
-| `⚑N` | `N` unresolved review threads | yellow |
+| `⚑N` | `N` unresolved review threads by a human, where you are not the last commenter | yellow |
+| `⚐N` | `N` unresolved review threads by a bot (shown only when there are no human threads) | blue |
 | `◆` | A review is required and has not been given | magenta |
 | `●` in the check column | Checks still running | blue |
 | `✓` in the review column | Approved | green |
@@ -109,9 +110,15 @@ Some deliberate choices worth knowing:
   is answerable from the same list. Their review and CI signals are suppressed,
   because once a branch has landed those are history. The merged search costs one
   extra point per poll.
-- **Every unresolved thread counts** — including ones you have already replied
-  to. The widget reports what GitHub reports rather than guessing whose turn it
-  is, so a thread the reviewer has not resolved keeps its row yellow.
+- **A thread you already replied to does not count.** If you are the last
+  commenter on an unresolved thread, it is waiting on them, not you, so it is
+  excluded from the count. The viewer's GitHub login is looked up once at
+  startup via `{ viewer { login } }`.
+- **Bot threads are separated from human threads.** A thread whose last
+  commenter is a GitHub App or bot (`__typename: "Bot"`) gets its own count
+  and glyph (`⚐` in the pane, `󰚩` in the sidebar), so automated noise does
+  not inflate the number that is yours to act on. When a PR has both, the pane
+  shows the human count with `⚑`; the sidebar tokens carry both.
 - `▪` is the one thing GitHub's own pull request list cannot tell you: which of
   these you actually have checked out right now.
 
@@ -202,7 +209,7 @@ The plugin writes sidebar tokens on agent panes (per-branch) and on workspaces
 | Token | Example | Meaning |
 |---|---|---|
 | `$pr_id` | `#21288`, `◌#208`, `▸#410`, `●#399` | PR number, with `◌` for drafts, `▸` for queued, `●` for merged |
-| `$pr_status` | `✓ ✓`, `⊘ ✗ ⚑3 ✗`, `◆ ●`, `queued`, `merged` | All signals combined |
+| `$pr_status` | `✓ ✓`, `⊘ ✗ 󰅺2 󰚩1 ✗`, `◆ ●`, `queued`, `merged` | All signals combined |
 
 For colored rendering, each signal has its own token — set to its glyph when
 active, absent when not — so the sidebar config can assign a fixed color:
@@ -212,7 +219,8 @@ active, absent when not — so the sidebar config can assign a fixed color:
 | `$pr_conflict` | `⊘` | `⊘` | Cannot merge — conflict |
 | `$pr_changes` | `✗` | `✗` | Changes requested |
 | `$pr_review` | `◆` | `` `nf-fa-eye` | Review required |
-| `$pr_threads` | `⚑N` | `󰅺N` `nf-md-comment_text_outline` | Unresolved review threads |
+| `$pr_human_threads` | `⚑N` | `󰅺N` `nf-md-comment_text_outline` | Unresolved human review threads |
+| `$pr_bot_threads` | `⚐N` | `󰚩N` `nf-md-robot_outline` | Unresolved bot review threads |
 | `$pr_approved` | `✓` | `✓` | Approved |
 | `$pr_queued` | `▸` | `▸` | In the merge queue |
 | `$pr_merged` | `●` | `●` | Merged |
@@ -230,7 +238,8 @@ rows = [
     {token = "$pr_conflict", fg = "#f38ba8", bold = true},
     {token = "$pr_changes",  fg = "#f38ba8", bold = true},
     {token = "$pr_ci_fail",  fg = "#f38ba8", bold = true},
-    {token = "$pr_threads",  fg = "#f9e2af", bold = true},
+    {token = "$pr_human_threads", fg = "#f9e2af", bold = true},
+    {token = "$pr_bot_threads",  fg = "#89b4fa"},
     {token = "$pr_review",   fg = "#cba6f7"},
     {token = "$pr_merged",   fg = "#cba6f7"},
     {token = "$pr_queued",   fg = "#89b4fa"},

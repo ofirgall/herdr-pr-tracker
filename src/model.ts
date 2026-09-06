@@ -112,9 +112,14 @@ export interface PrRow {
    * `mergeable` at all — is false here: no news, never a claimed conflict and
    * never a claimed mergeable. See docs/adr/0004. */
   conflict: boolean;
-  /** Unresolved review threads. */
-  unresolved: number;
-  /** True when reviewThreads hit the page cap, so `unresolved` is a floor. */
+  /** Unresolved review threads left by a human where the viewer has not
+   * replied. These are the ones that need your attention. */
+  unresolvedHuman: number;
+  /** Unresolved review threads left by a bot where the viewer has not
+   * replied. Tracked separately so the sidebar can show them without
+   * competing with the actionable count. */
+  unresolvedBot: number;
+  /** True when reviewThreads hit the page cap, so the counts are floors. */
   unresolvedCapped: boolean;
   /** The pull request is in the merge queue. */
   isQueued: boolean;
@@ -216,7 +221,7 @@ export function signalsFor(row: PrRow, view: View = DEFAULT_VIEW): Signal[] {
   if (row.conflict) out.push("conflict");
   if (row.review === "CHANGES_REQUESTED") out.push("changes-requested");
   if (row.ci === "fail") out.push("checks-failed");
-  if (row.unresolved > 0) out.push("unresolved");
+  if (row.unresolvedHuman > 0 || row.unresolvedBot > 0) out.push("unresolved");
   if (row.review === "REVIEW_REQUIRED") out.push("review-required");
   if (row.ci === "pending") out.push("checks-pending");
   if (row.review === "APPROVED") out.push("approved");
@@ -253,7 +258,14 @@ interface RawNode {
   repository?: { name?: string; owner?: { login?: string } };
   reviewThreads?: {
     totalCount?: number;
-    nodes?: Array<{ isResolved?: boolean } | null> | null;
+    nodes?: Array<{
+      isResolved?: boolean;
+      comments?: {
+        nodes?: Array<{
+          author?: { __typename?: string; login?: string } | null;
+        } | null> | null;
+      } | null;
+    } | null> | null;
   };
   commits?: {
     nodes?: Array<{
@@ -303,10 +315,22 @@ function reviewOf(n: RawNode): ReviewDecision {
 }
 
 /** One raw node to one row. Shared by both views so a field can never be read
- * one way in the authored view and another way in the inbound one. */
-function toRow(n: RawNode, threadCap: number): PrRow {
+ * one way in the authored view and another way in the inbound one.
+ *
+ * `viewer` is the authenticated user's login, used to exclude threads the
+ * viewer already replied to. Empty when the viewer is unknown — every
+ * unresolved thread then counts as human, which is the safe default. */
+function toRow(n: RawNode, threadCap: number, viewer: string): PrRow {
   const threads = n.reviewThreads?.nodes ?? [];
-  const unresolved = threads.filter((t) => t && t.isResolved === false).length;
+  let unresolvedHuman = 0;
+  let unresolvedBot = 0;
+  for (const t of threads) {
+    if (!t || t.isResolved !== false) continue;
+    const last = t.comments?.nodes?.[0]?.author;
+    if (viewer && last?.login === viewer) continue;
+    if (last?.__typename === "Bot") unresolvedBot++;
+    else unresolvedHuman++;
+  }
   const total = n.reviewThreads?.totalCount ?? threads.length;
   const contexts =
     n.commits?.nodes?.[0]?.commit?.statusCheckRollup?.contexts?.nodes ?? [];
@@ -329,7 +353,8 @@ function toRow(n: RawNode, threadCap: number): PrRow {
     // are all "not conflicting" — the lazily-computed UNKNOWN deliberately
     // reads the same as a clean branch rather than as a warning.
     conflict: n.mergeable === "CONFLICTING",
-    unresolved,
+    unresolvedHuman,
+    unresolvedBot,
     // The thread page is capped, so a PR at the cap may have more unresolved
     // threads than we counted. Render that as a floor rather than as a
     // confident number.
@@ -355,10 +380,10 @@ function nodesOf(result: unknown): RawNode[] {
  * widget that rearranges itself while you glance at it is harder to read than
  * one whose rows never move. Drafts stay in date position for the same reason.
  */
-export function parseSearch(payload: unknown, threadCap = 100): PrList {
+export function parseSearch(payload: unknown, threadCap = 100, viewer = ""): PrList {
   const search = (payload as any)?.data?.search ?? {};
   const rows = nodesOf(search)
-    .map((n) => toRow(n, threadCap))
+    .map((n) => toRow(n, threadCap, viewer))
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 
   const issueCount = typeof search.issueCount === "number"
@@ -376,17 +401,17 @@ export function parseSearch(payload: unknown, threadCap = 100): PrList {
  * section). Duplicates are impossible in practice — a PR is either open or
  * merged — but deduplicated by key just in case, with the open row winning.
  */
-export function parseAuthored(payload: unknown, threadCap = 100): PrList {
+export function parseAuthored(payload: unknown, threadCap = 100, viewer = ""): PrList {
   const data = (payload as any)?.data ?? {};
   const openSearch = data.open ?? data.search ?? {};
   const mergedSearch = data.merged ?? {};
 
   const openRows = nodesOf(openSearch)
-    .map((n) => toRow(n, threadCap))
+    .map((n) => toRow(n, threadCap, viewer))
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 
   const mergedRows = nodesOf(mergedSearch)
-    .map((n) => toRow(n, threadCap))
+    .map((n) => toRow(n, threadCap, viewer))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
   const seen = new Set<string>();
@@ -424,13 +449,13 @@ const key = (r: PrRow) => `${r.owner}/${r.repo}#${r.number}`;
  * until it merges, so the oldest rows are the ones already dealt with and
  * oldest-first would push the freshest requests off the bottom.
  */
-export function parseInbound(payload: unknown, threadCap = 100, cap = 100): PrList {
+export function parseInbound(payload: unknown, threadCap = 100, cap = 100, viewer = ""): PrList {
   const data = (payload as any)?.data ?? {};
   const seen = new Map<string, PrRow>();
 
   for (const search of INBOUND_SEARCHES) {
     for (const node of nodesOf(data[search.alias])) {
-      const row = { ...toRow(node, threadCap), reason: search.reason };
+      const row = { ...toRow(node, threadCap, viewer), reason: search.reason };
       // Reasons are declared strongest-first, so the first search to claim a
       // row keeps it and a later, weaker one cannot demote it.
       const id = key(row);

@@ -146,19 +146,36 @@ describe("parseSearch", () => {
     );
   });
 
-  test("counts only unresolved threads", () => {
-    expect(byNumber(112).unresolved).toBe(0); // four resolved threads
-    expect(byNumber(102).unresolved).toBe(3);
+  test("counts only unresolved threads, split by author type", () => {
+    expect(byNumber(112).unresolvedHuman).toBe(0); // four resolved threads
+    expect(byNumber(112).unresolvedBot).toBe(0);
+    // #102 has 2 human + 1 bot unresolved
+    expect(byNumber(102).unresolvedHuman).toBe(2);
+    expect(byNumber(102).unresolvedBot).toBe(1);
   });
 
   test("a capped thread page reports a floor, not a confident count", () => {
     const row = byNumber(109);
-    expect(row.unresolved).toBe(100);
+    expect(row.unresolvedHuman).toBe(100);
     expect(row.unresolvedCapped).toBe(true);
   });
 
   test("an uncapped page is not marked as a floor", () => {
     expect(byNumber(102).unresolvedCapped).toBe(false);
+  });
+
+  test("threads where the viewer is the last commenter are excluded", () => {
+    // #102 has 3 unresolved: 2 by "priya" (User), 1 by "cursor" (Bot).
+    // As viewer "priya", both human threads are excluded.
+    const row = parseSearch(states, 100, "priya").rows.find((r) => r.number === 102)!;
+    expect(row.unresolvedHuman).toBe(0);
+    expect(row.unresolvedBot).toBe(1);
+  });
+
+  test("threads without comment data default to human", () => {
+    // #109 has 100 unresolved threads with no comment data in the fixture.
+    expect(byNumber(109).unresolvedBot).toBe(0);
+    expect(byNumber(109).unresolvedHuman).toBe(100);
   });
 
   // GitHub populates reviewDecision only where branch protection requires a

@@ -7,7 +7,7 @@
 
 import { dirname, join } from "node:path";
 import { ignoreNotice, ignoreWarning, loadConfig } from "../src/config.ts";
-import { fetchInbound, fetchPrs, GhError } from "../src/gh.ts";
+import { fetchInbound, fetchPrs, fetchViewer, GhError } from "../src/gh.ts";
 import { listPanes, listWorkspaces, setPaneTitle } from "../src/herdr.ts";
 import type { PrRow } from "../src/model.ts";
 import { needsOwner } from "../src/model.ts";
@@ -40,6 +40,7 @@ const MOUSE_ON = `${ESC}[?1000h${ESC}[?1006h`;
 const MOUSE_OFF = `${ESC}[?1006l${ESC}[?1000l`;
 
 const cfg = await loadConfig(PLUGIN_ROOT, process.env.HERDR_PLUGIN_CONFIG_DIR);
+const viewer = await fetchViewer();
 // Written before the alt screen is entered, so in a Herdr pane it is painted and
 // then immediately covered: this is a trail for a pane run directly (`bun
 // bin/pane.ts`) or one that exits early, **not** a message the user will see in
@@ -270,8 +271,8 @@ async function refresh(target: View) {
     // The inbound view is deliberately not `fetchPrs` with a different query:
     // it is three searches and a dedup, and its rows carry a reason.
     const list = target === "inbound"
-      ? await fetchInbound(cfg.maxPrs, cfg.ignore)
-      : await fetchPrs(cfg.searchQuery, cfg.maxPrs, cfg.ignore);
+      ? await fetchInbound(cfg.maxPrs, cfg.ignore, 100, viewer)
+      : await fetchPrs(cfg.searchQuery, cfg.maxPrs, cfg.ignore, 100, viewer);
     // Workspace linkage is local and cheap, and a failure to read it must not
     // discard a good PR fetch — so it degrades to "nothing linked".
     let linked = list.rows;

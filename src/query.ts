@@ -40,7 +40,12 @@ const PR_FIELDS = `
         repository { name owner { login } }
         reviewThreads(first: $threads) {
           totalCount
-          nodes { isResolved }
+          nodes {
+            isResolved
+            comments(last: 1) {
+              nodes { author { __typename login } }
+            }
+          }
         }
         commits(last: 1) {
           nodes {

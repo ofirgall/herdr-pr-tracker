@@ -228,7 +228,7 @@ describe("renderRow", () => {
   });
 
   test("review required alone is magenta", () => {
-    const row = { ...pr(102), unresolved: 0, unresolvedCapped: false };
+    const row = { ...pr(102), unresolvedHuman: 0, unresolvedBot: 0, unresolvedCapped: false };
     expect(renderRow(row, opts())[0]).toContain("\x1b[35m");
   });
 
@@ -291,7 +291,7 @@ describe("header", () => {
     const mergedRows = states.rows.filter((r) => r.isMerged);
     const loud = openRows.filter((r) =>
       r.conflict || r.review === "CHANGES_REQUESTED" || r.ci === "fail" ||
-      r.unresolved > 0
+      r.unresolvedHuman > 0 || r.unresolvedBot > 0
     ).length;
     expect(h).toContain(`${openRows.length} open`);
     if (mergedRows.length > 0) expect(h).toContain(`${mergedRows.length} merged`);
@@ -305,7 +305,7 @@ describe("header", () => {
 
   test("a list with nothing to act on says only how many are open", () => {
     const calm = live.rows.filter((r) =>
-      r.review !== "CHANGES_REQUESTED" && r.ci !== "fail" && r.unresolved === 0
+      r.review !== "CHANGES_REQUESTED" && r.ci !== "fail" && r.unresolvedHuman === 0 && r.unresolvedBot === 0
     );
     expect(header(calm, opts({ cols: 60 }))).not.toContain("need you");
   });

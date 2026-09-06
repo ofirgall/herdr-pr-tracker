@@ -5,6 +5,7 @@
 // Both surfaces use the same glyphs so they can never appear to disagree.
 
 import {
+  BOT_THREADS,
   CI_FAIL,
   CI_PASS,
   CI_PENDING,
@@ -19,7 +20,7 @@ import {
   THREADS,
 } from "./glyphs.ts";
 
-export { CONFLICT, DRAFT, MERGED, QUEUED, REFRESHING, THREADS };
+export { BOT_THREADS, CONFLICT, DRAFT, MERGED, QUEUED, REFRESHING, THREADS };
 
 /** Buckets `gh pr checks --json bucket` reports. */
 export type Bucket = "pass" | "fail" | "pending" | "skipping" | "cancel";
@@ -73,7 +74,8 @@ export interface TokenState {
   ci: TokenCi;
   review: TokenReview;
   conflict: boolean;
-  unresolved: number;
+  unresolvedHuman: number;
+  unresolvedBot: number;
   isDraft: boolean;
   isQueued: boolean;
   isMerged: boolean;
@@ -94,7 +96,8 @@ export function tokenStatus(s: TokenState): string {
   if (s.conflict) parts.push(CONFLICT);
   const r = REVIEW_GLYPH[s.review];
   if (r) parts.push(r);
-  if (s.unresolved > 0) parts.push(`${THREADS}${s.unresolved}`);
+  if (s.unresolvedHuman > 0) parts.push(`${THREADS}${s.unresolvedHuman}`);
+  if (s.unresolvedBot > 0) parts.push(`${BOT_THREADS}${s.unresolvedBot}`);
   const c = CI_GLYPH[s.ci];
   if (c) parts.push(c);
   return parts.join(" ");
@@ -115,7 +118,8 @@ export const SIGNAL_TOKENS = [
   "pr_conflict",
   "pr_changes",
   "pr_review",
-  "pr_threads",
+  "pr_human_threads",
+  "pr_bot_threads",
   "pr_approved",
   "pr_queued",
   "pr_merged",
@@ -134,7 +138,8 @@ export function signalTokens(s: TokenState): Record<SignalTokenName, string> {
     pr_approved: s.review === "approved" ? REVIEW_GLYPH["approved"] : "",
     pr_queued: s.isQueued ? QUEUED : "",
     pr_merged: s.isMerged ? MERGED : "",
-    pr_threads: s.unresolved > 0 ? `${THREADS}${s.unresolved}` : "",
+    pr_human_threads: s.unresolvedHuman > 0 ? `${THREADS}${s.unresolvedHuman}` : "",
+    pr_bot_threads: s.unresolvedBot > 0 ? `${BOT_THREADS}${s.unresolvedBot}` : "",
     pr_ci_pass: s.ci === "pass" ? CI_GLYPH["pass"] : "",
     pr_ci_fail: s.ci === "fail" ? CI_GLYPH["fail"] : "",
     pr_ci_run: s.ci === "pending" ? CI_GLYPH["pending"] : "",

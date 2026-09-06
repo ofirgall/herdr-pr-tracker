@@ -71,10 +71,12 @@
             "totalCount": 2,
             "nodes": [
               {
-                "isResolved": false
+                "isResolved": false,
+                "comments": { "nodes": [{ "author": { "__typename": "User", "login": "priya" } }] }
               },
               {
-                "isResolved": false
+                "isResolved": false,
+                "comments": { "nodes": [{ "author": { "__typename": "User", "login": "priya" } }] }
               }
             ]
           },
@@ -256,10 +258,12 @@
             "totalCount": 2,
             "nodes": [
               {
-                "isResolved": false
+                "isResolved": false,
+                "comments": { "nodes": [{ "author": { "__typename": "User", "login": "priya" } }] }
               },
               {
-                "isResolved": false
+                "isResolved": false,
+                "comments": { "nodes": [{ "author": { "__typename": "User", "login": "priya" } }] }
               }
             ]
           },

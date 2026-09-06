@@ -3,7 +3,7 @@
 // and for every workspace with a worktree.
 
 import { join } from "node:path";
-import { fetchBranchChecks, fetchBranchPr } from "../src/gh.ts";
+import { fetchBranchChecks, fetchBranchPr, fetchViewer } from "../src/gh.ts";
 import {
   clearToken, clearWorkspaceToken, currentPane, listPanes, listWorkspaces,
   type PaneInfo, setToken, setWorkspaceToken,
@@ -76,8 +76,8 @@ async function throttled(key: string, seconds: number): Promise<boolean> {
   return false;
 }
 
-async function lookupToken(cwd: string, branch: string): Promise<TokenState | null> {
-  const pr = await fetchBranchPr(cwd, branch);
+async function lookupToken(cwd: string, branch: string, viewer: string): Promise<TokenState | null> {
+  const pr = await fetchBranchPr(cwd, branch, viewer);
   if (!pr) return null;
   if (pr.state === "CLOSED") return null;
   const merged = pr.state === "MERGED";
@@ -90,7 +90,8 @@ async function lookupToken(cwd: string, branch: string): Promise<TokenState | nu
     ci,
     review,
     conflict: !settled && pr.mergeable === "CONFLICTING",
-    unresolved: settled ? 0 : pr.unresolvedThreads,
+    unresolvedHuman: settled ? 0 : pr.unresolvedHuman,
+    unresolvedBot: settled ? 0 : pr.unresolvedBot,
     isDraft: !settled && pr.isDraft,
     isQueued: queued,
     isMerged: merged,
@@ -141,6 +142,7 @@ const cfg = await loadConfig(
   process.env.HERDR_PLUGIN_ROOT ?? ".",
   process.env.HERDR_PLUGIN_CONFIG_DIR,
 );
+const viewer = await fetchViewer();
 const automatic = Boolean(process.env.HERDR_PLUGIN_EVENT_JSON);
 
 // Workspace-level tokens: set $pr_id and $pr_status on every workspace that
@@ -156,7 +158,7 @@ await Promise.all(workspaces.map(async (ws) => {
     await clearAllWorkspaceTokens(id);
     return;
   }
-  const state = await lookupToken(checkoutPath, branch);
+  const state = await lookupToken(checkoutPath, branch, viewer);
   if (!state) {
     await clearAllWorkspaceTokens(id);
     return;
@@ -189,7 +191,7 @@ if (!branch) {
 const pending = refreshingLabel(pane.tokens?.[TOKEN_ID]);
 if (pending) await setToken(pane.pane_id, TOKEN_ID, pending);
 
-const state = await lookupToken(cwd, branch);
+const state = await lookupToken(cwd, branch, viewer);
 if (!state) {
   await clearAllPaneTokens(pane.pane_id);
   process.exit(0);

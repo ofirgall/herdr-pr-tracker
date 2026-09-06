@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  BOT_THREADS,
   CONFLICT,
   DRAFT,
   QUEUED,
@@ -21,7 +22,8 @@ const base: TokenState = {
   ci: "none",
   review: "none",
   conflict: false,
-  unresolved: 0,
+  unresolvedHuman: 0,
+  unresolvedBot: 0,
   isDraft: false,
   isQueued: false,
   isMerged: false,
@@ -102,13 +104,16 @@ describe("tokenStatus", () => {
     expect(tokenStatus(tok({ conflict: true }))).toBe(CONFLICT);
   });
   test("unresolved threads", () => {
-    expect(tokenStatus(tok({ unresolved: 4, ci: "pass" }))).toBe(`${THREADS}4 ${CI_PASS}`);
+    expect(tokenStatus(tok({ unresolvedHuman: 3, unresolvedBot: 1, ci: "pass" }))).toBe(`${THREADS}3 ${BOT_THREADS}1 ${CI_PASS}`);
   });
   test("unresolved threads with review", () => {
-    expect(tokenStatus(tok({ review: "approved", unresolved: 2, ci: "pass" }))).toBe(`✓ ${THREADS}2 ${CI_PASS}`);
+    expect(tokenStatus(tok({ review: "approved", unresolvedHuman: 2, ci: "pass" }))).toBe(`✓ ${THREADS}2 ${CI_PASS}`);
+  });
+  test("bot-only threads", () => {
+    expect(tokenStatus(tok({ unresolvedBot: 4, ci: "pass" }))).toBe(`${BOT_THREADS}4 ${CI_PASS}`);
   });
   test("all signals", () => {
-    expect(tokenStatus(tok({ conflict: true, review: "changes-requested", unresolved: 3, ci: "fail" }))).toBe(`${CONFLICT} ✗ ${THREADS}3 ${CI_FAIL}`);
+    expect(tokenStatus(tok({ conflict: true, review: "changes-requested", unresolvedHuman: 2, unresolvedBot: 1, ci: "fail" }))).toBe(`${CONFLICT} ✗ ${THREADS}2 ${BOT_THREADS}1 ${CI_FAIL}`);
   });
   test("queued returns queued", () => {
     expect(tokenStatus(tok({ isQueued: true }))).toBe("queued");
@@ -142,7 +147,8 @@ describe("signalTokens", () => {
     expect(s.pr_approved).toBe("");
     expect(s.pr_queued).toBe("");
     expect(s.pr_merged).toBe("");
-    expect(s.pr_threads).toBe("");
+    expect(s.pr_human_threads).toBe("");
+    expect(s.pr_bot_threads).toBe("");
     expect(s.pr_ci_pass).toBe("");
     expect(s.pr_ci_fail).toBe("");
     expect(s.pr_ci_run).toBe("");
@@ -169,9 +175,15 @@ describe("signalTokens", () => {
     expect(s.pr_approved).toBe("");
     expect(s.pr_changes).toBe("");
   });
-  test("threads set pr_threads with count", () => {
-    const s = signalTokens(tok({ unresolved: 5 }));
-    expect(s.pr_threads).toBe(`${THREADS}5`);
+  test("human threads set pr_human_threads with count", () => {
+    const s = signalTokens(tok({ unresolvedHuman: 5 }));
+    expect(s.pr_human_threads).toBe(`${THREADS}5`);
+    expect(s.pr_bot_threads).toBe("");
+  });
+  test("bot threads set pr_bot_threads with count", () => {
+    const s = signalTokens(tok({ unresolvedBot: 3 }));
+    expect(s.pr_bot_threads).toBe(`${BOT_THREADS}3`);
+    expect(s.pr_human_threads).toBe("");
   });
   test("CI pass", () => {
     const s = signalTokens(tok({ ci: "pass" }));
@@ -196,10 +208,11 @@ describe("signalTokens", () => {
     expect(s.pr_ci_pass).toBe("");
   });
   test("all signals at once", () => {
-    const s = signalTokens(tok({ conflict: true, review: "changes-requested", unresolved: 3, ci: "fail" }));
+    const s = signalTokens(tok({ conflict: true, review: "changes-requested", unresolvedHuman: 2, unresolvedBot: 1, ci: "fail" }));
     expect(s.pr_conflict).toBe(CONFLICT);
     expect(s.pr_changes).toBe("✗");
-    expect(s.pr_threads).toBe(`${THREADS}3`);
+    expect(s.pr_human_threads).toBe(`${THREADS}2`);
+    expect(s.pr_bot_threads).toBe(`${BOT_THREADS}1`);
     expect(s.pr_ci_fail).toBe(CI_FAIL);
     expect(s.pr_approved).toBe("");
     expect(s.pr_review).toBe("");

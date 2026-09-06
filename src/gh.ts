@@ -115,13 +115,14 @@ export async function fetchPrs(
   maxPrs: number,
   ignore: readonly IgnoreEntry[],
   threads = 100,
+  viewer = "",
 ): Promise<PrList> {
   const now = Date.now();
   const payload = await graphql(
     searchArgs(query, maxPrs, ignore, threads, now),
     (data) => Boolean(data.open ?? data.search),
   );
-  return parseAuthored(payload, threads);
+  return parseAuthored(payload, threads, viewer);
 }
 
 /**
@@ -141,9 +142,10 @@ export async function fetchInbound(
   maxPrs: number,
   ignore: readonly IgnoreEntry[],
   threads = 100,
+  viewer = "",
 ): Promise<PrList> {
   const payload = await graphql(inboundArgs(ignore, threads), inboundComplete);
-  return parseInbound(payload, threads, maxPrs);
+  return parseInbound(payload, threads, maxPrs, viewer);
 }
 
 /**
@@ -156,7 +158,8 @@ export interface BranchPr {
   isDraft: boolean;
   reviewDecision: string | null;
   mergeable: string | null;
-  unresolvedThreads: number;
+  unresolvedHuman: number;
+  unresolvedBot: number;
   isQueued: boolean;
 }
 
@@ -168,6 +171,7 @@ export interface BranchPr {
 export async function fetchBranchPr(
   cwd: string,
   branch: string,
+  viewer = "",
 ): Promise<BranchPr | null> {
   const r = await run(
     ["pr", "view", branch, "--json", "number,state,isDraft,reviewDecision,mergeable"],
@@ -177,14 +181,15 @@ export async function fetchBranchPr(
   try {
     const j = JSON.parse(r.out);
     if (typeof j?.number !== "number") return null;
-    const extras = await fetchPrExtras(cwd, j.number);
+    const extras = await fetchPrExtras(cwd, j.number, viewer);
     return {
       number: j.number,
       state: String(j.state ?? "OPEN"),
       isDraft: j.isDraft === true,
       reviewDecision: typeof j.reviewDecision === "string" ? j.reviewDecision : null,
       mergeable: typeof j.mergeable === "string" ? j.mergeable : null,
-      unresolvedThreads: extras.unresolvedThreads,
+      unresolvedHuman: extras.unresolvedHuman,
+      unresolvedBot: extras.unresolvedBot,
       isQueued: extras.isQueued,
     };
   } catch {
@@ -198,7 +203,12 @@ query($owner: String!, $repo: String!, $number: Int!) {
     pullRequest(number: $number) {
       mergeQueueEntry { state }
       reviewThreads(first: 100) {
-        nodes { isResolved }
+        nodes {
+          isResolved
+          comments(last: 1) {
+            nodes { author { __typename login } }
+          }
+        }
       }
     }
   }
@@ -218,13 +228,14 @@ async function repoOwnerAndName(cwd: string): Promise<{ owner: string; name: str
 }
 
 interface PrExtras {
-  unresolvedThreads: number;
+  unresolvedHuman: number;
+  unresolvedBot: number;
   isQueued: boolean;
 }
 
-async function fetchPrExtras(cwd: string, prNumber: number): Promise<PrExtras> {
+async function fetchPrExtras(cwd: string, prNumber: number, viewer: string): Promise<PrExtras> {
   const repo = await repoOwnerAndName(cwd);
-  if (!repo) return { unresolvedThreads: 0, isQueued: false };
+  if (!repo) return { unresolvedHuman: 0, unresolvedBot: 0, isQueued: false };
   const r = await run([
     "api", "graphql",
     "-f", `query=${THREADS_QUERY}`,
@@ -232,17 +243,36 @@ async function fetchPrExtras(cwd: string, prNumber: number): Promise<PrExtras> {
     "-F", `repo=${repo.name}`,
     "-F", `number=${prNumber}`,
   ], cwd);
-  if (!r.ok) return { unresolvedThreads: 0, isQueued: false };
+  if (!r.ok) return { unresolvedHuman: 0, unresolvedBot: 0, isQueued: false };
   try {
     const pr = JSON.parse(r.out)?.data?.repository?.pullRequest;
     const threads = pr?.reviewThreads?.nodes;
-    const unresolvedThreads = Array.isArray(threads)
-      ? threads.filter((t: { isResolved?: boolean }) => t && t.isResolved === false).length
-      : 0;
+    let unresolvedHuman = 0;
+    let unresolvedBot = 0;
+    if (Array.isArray(threads)) {
+      for (const t of threads) {
+        if (!t || t.isResolved !== false) continue;
+        const last = t.comments?.nodes?.[0]?.author;
+        if (viewer && last?.login === viewer) continue;
+        if (last?.__typename === "Bot") unresolvedBot++;
+        else unresolvedHuman++;
+      }
+    }
     const isQueued = pr?.mergeQueueEntry != null;
-    return { unresolvedThreads, isQueued };
+    return { unresolvedHuman, unresolvedBot, isQueued };
   } catch {
-    return { unresolvedThreads: 0, isQueued: false };
+    return { unresolvedHuman: 0, unresolvedBot: 0, isQueued: false };
+  }
+}
+
+/** The authenticated user's login. One API point, cached for the session. */
+export async function fetchViewer(): Promise<string> {
+  const r = await run(["api", "graphql", "-f", "query={ viewer { login } }"]);
+  if (!r.ok) return "";
+  try {
+    return (JSON.parse(r.out) as any)?.data?.viewer?.login ?? "";
+  } catch {
+    return "";
   }
 }
 
