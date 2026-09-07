@@ -10,9 +10,9 @@
 // --- status cluster (pane) -------------------------------------------------
 
 /** Review: approved. Universal. */
-export const REVIEW_APPROVED = "✓"; // ✓
+export const REVIEW_APPROVED = "󰀈"; // ✓
 /** Review: changes requested. Universal. */
-export const REVIEW_CHANGES = "✗"; // ✗
+export const REVIEW_CHANGES = "󱋟"; // ✗
 /** Review: required and not yet given. nf-fa-eye */
 export const REVIEW_REQUIRED = "󰈈"; //
 /** CI: passing. nf-fa-check_circle */
