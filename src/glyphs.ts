@@ -29,7 +29,7 @@ export const BOT_THREADS = "󰚩"; // 󰚩
 // --- row markers (pane lead column) ----------------------------------------
 
 /** Cannot be merged — conflict. Universal. */
-export const CONFLICT = "⊘"; // ⊘
+export const CONFLICT = "󱠫"; // ⊘
 /** Draft pull request. Universal. */
 export const DRAFT = "◌"; // ◌
 /** Merged pull request. Universal (placeholder — set the codepoint below
