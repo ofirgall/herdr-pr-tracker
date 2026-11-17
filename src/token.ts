@@ -83,9 +83,10 @@ export interface TokenState {
   url?: string | null;
 }
 
-/** `◌#21288` / `●#21288` — draft/merged marker and number. */
+/** `◌#21288` / `▸#21288` — draft/queued marker and number. A merged PR
+ * shows the bare number — `$pr_status` already says `merged`. */
 export function tokenId(s: TokenState): string {
-  const mark = s.isQueued ? QUEUED : s.isMerged ? MERGED : s.isDraft ? DRAFT : "";
+  const mark = s.isQueued ? QUEUED : s.isDraft && !s.isMerged ? DRAFT : "";
   return `${mark}#${s.number}`;
 }
 

@@ -79,6 +79,9 @@ describe("tokenId", () => {
   test("queued PR", () => {
     expect(tokenId(tok({ number: 500, isQueued: true }))).toBe(`${QUEUED}#500`);
   });
+  test("merged PR has no marker", () => {
+    expect(tokenId(tok({ number: 399, isMerged: true }))).toBe("#399");
+  });
 });
 
 describe("tokenStatus", () => {

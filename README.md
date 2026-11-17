@@ -208,7 +208,7 @@ The plugin writes sidebar tokens on agent panes (per-branch) and on workspaces
 
 | Token | Example | Meaning |
 |---|---|---|
-| `$pr_id` | `#21288`, `◌#208`, `▸#410`, `●#399` | PR number, with `◌` for drafts, `▸` for queued, `●` for merged |
+| `$pr_id` | `#21288`, `◌#208`, `▸#410` | PR number, with `◌` for drafts, `▸` for queued |
 | `$pr_status` | `✓ ✓`, `⊘ ✗ 󰅺2 󰚩1 ✗`, `◆ ●`, `queued`, `merged` | All signals combined |
 
 For colored rendering, each signal has its own token — set to its glyph when
