@@ -62,6 +62,11 @@ describe("parseConfig", () => {
     (v, expected) => expect(parseConfig(`COLOR=${v}`).colour).toBe(expected as boolean),
   );
 
+  test.each([["off", false], ["0", false], ["on", true], ["yes", true]])(
+    "TOKEN_LINKS=%s is %p",
+    (v, expected) => expect(parseConfig(`TOKEN_LINKS=${v}`).tokenLinks).toBe(expected as boolean),
+  );
+
   test("COLOUR is accepted as a spelling of COLOR", () => {
     expect(parseConfig("COLOUR=off").colour).toBe(false);
   });
@@ -75,6 +80,7 @@ describe("parseConfig", () => {
     expect(DEFAULTS.maxPrs).toBe(100);
     expect(DEFAULTS.showOwner).toBe("auto");
     expect(DEFAULTS.colour).toBe(true);
+    expect(DEFAULTS.tokenLinks).toBe(true);
     expect(DEFAULTS.ignore).toEqual([]);
     expect(DEFAULTS.ignoreDropped).toEqual([]);
   });

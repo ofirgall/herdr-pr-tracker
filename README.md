@@ -228,6 +228,11 @@ active, absent when not — so the sidebar config can assign a fixed color:
 | `$pr_ci_fail` | `✗` | `` `nf-oct-x_circle_fill` | Checks failing |
 | `$pr_ci_run` | `●` | `` `nf-cod-loading` | Checks running |
 
+`$pr_id` carries the PR's URL as a token link, so a Herdr with clickable
+sidebar tokens underlines it and opens the PR on click. Set `TOKEN_LINKS=off`
+in the config to leave it plain. Herdr versions without token links reject the
+`--link` flag; the plugin then writes the token without it.
+
 The sidebar uses [Nerd Font](https://www.nerdfonts.com/) icons where available;
 the Unicode column shows the fallback glyph the pane widget uses.
 

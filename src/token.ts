@@ -79,6 +79,8 @@ export interface TokenState {
   isDraft: boolean;
   isQueued: boolean;
   isMerged: boolean;
+  /** The PR's web URL, attached to `$pr_id` as a clickable link. */
+  url?: string | null;
 }
 
 /** `◌#21288` / `●#21288` — draft/merged marker and number. */

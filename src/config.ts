@@ -14,6 +14,9 @@ export interface Config {
   colour: boolean;
   /** Minimum seconds between per-pane sidebar-token lookups. */
   tokenThrottleSeconds: number;
+  /** Attach the PR's URL to the `$pr_id` sidebar token so Herdr can open it on
+   * click. Ignored by Herdr versions without token links. */
+  tokenLinks: boolean;
   /** Repositories and owners whose pull requests are never fetched, in either
    * view. */
   ignore: IgnoreEntry[];
@@ -30,6 +33,7 @@ export const DEFAULTS: Config = {
   showOwner: "auto",
   colour: true,
   tokenThrottleSeconds: 30,
+  tokenLinks: true,
   ignore: [],
   ignoreDropped: [],
 };
@@ -131,6 +135,11 @@ export function ignoreNotice(dropped: readonly string[]): string | null {
   return `${dropped.length} bad IGNORE_REPOS ${entryNoun(dropped.length)}`;
 }
 
+function isOff(value: string): boolean {
+  const v = value.toLowerCase();
+  return v === "0" || v === "off" || v === "false" || v === "no";
+}
+
 /** Parse `KEY=value` lines. Shell-shaped so the file is interchangeable with
  * the `config`/`config.example` convention the sibling plugin established. */
 export function parseConfig(text: string): Partial<Config> {
@@ -171,9 +180,9 @@ export function parseConfig(text: string): Partial<Config> {
     cfg.ignore = entries;
     cfg.ignoreDropped = dropped;
   }
+  if (out.TOKEN_LINKS != null) cfg.tokenLinks = !isOff(out.TOKEN_LINKS);
   if (out.COLOR != null || out.COLOUR != null) {
-    const v = (out.COLOR ?? out.COLOUR)!.toLowerCase();
-    cfg.colour = !(v === "0" || v === "off" || v === "false" || v === "no");
+    cfg.colour = !isOff((out.COLOR ?? out.COLOUR)!);
   }
   return cfg;
 }

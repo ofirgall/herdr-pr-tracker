@@ -22,6 +22,18 @@ async function call(args: string[]): Promise<unknown | null> {
   }
 }
 
+/** Run a command for its effect and report whether Herdr accepted it.
+ * `report-metadata` prints nothing on success, so `call`'s null cannot tell
+ * success from failure there. */
+async function succeeds(args: string[]): Promise<boolean> {
+  try {
+    const p = Bun.spawn([HERDR, ...args], { stdout: "ignore", stderr: "ignore" });
+    return (await p.exited) === 0;
+  } catch {
+    return false;
+  }
+}
+
 /** Herdr's CLI wraps every reply as `{id, result: {...}}`. */
 function result(payload: unknown): Record<string, unknown> | null {
   const r = (payload as { result?: unknown } | null)?.result;
@@ -81,12 +93,39 @@ export async function listWorkspaces(): Promise<WorkspaceInfo[]> {
  * blank between refreshes, which reads as "this branch has no PR" rather than
  * "nobody has looked recently".
  */
-export async function setToken(paneId: string, name: string, value: string): Promise<void> {
-  await call([
-    "pane", "report-metadata", paneId,
-    "--source", METADATA_SOURCE,
-    "--token", `${name}=${value}`,
-  ]);
+export async function setToken(
+  paneId: string,
+  name: string,
+  value: string,
+  link?: string | null,
+): Promise<void> {
+  await reportToken(["pane", "report-metadata", paneId], name, value, link);
+}
+
+/** Set once a Herdr refuses `--link`, so the rest of this run skips the
+ * doomed first attempt instead of paying two calls per token. */
+let linksUnsupported = false;
+
+/**
+ * Write one token, optionally with a link Herdr opens when the token is
+ * clicked.
+ *
+ * `--link` is newer than `--token`; an older Herdr rejects the whole call as
+ * an unknown flag. Rather than probing the version, try with the link and, if
+ * that fails, write the token alone — the link is a nicety, the token is not.
+ */
+async function reportToken(
+  base: string[],
+  name: string,
+  value: string,
+  link?: string | null,
+): Promise<void> {
+  const args = [...base, "--source", METADATA_SOURCE, "--token", `${name}=${value}`];
+  if (link && !linksUnsupported) {
+    if (await succeeds([...args, "--link", `${name}=${link}`])) return;
+    linksUnsupported = true;
+  }
+  await call(args);
 }
 
 /**
@@ -115,12 +154,13 @@ export async function clearToken(paneId: string, name: string): Promise<void> {
   ]);
 }
 
-export async function setWorkspaceToken(workspaceId: string, name: string, value: string): Promise<void> {
-  await call([
-    "workspace", "report-metadata", workspaceId,
-    "--source", METADATA_SOURCE,
-    "--token", `${name}=${value}`,
-  ]);
+export async function setWorkspaceToken(
+  workspaceId: string,
+  name: string,
+  value: string,
+  link?: string | null,
+): Promise<void> {
+  await reportToken(["workspace", "report-metadata", workspaceId], name, value, link);
 }
 
 export async function clearWorkspaceToken(workspaceId: string, name: string): Promise<void> {

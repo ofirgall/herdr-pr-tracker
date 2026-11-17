@@ -95,13 +95,14 @@ async function lookupToken(cwd: string, branch: string, viewer: string): Promise
     isDraft: !settled && pr.isDraft,
     isQueued: queued,
     isMerged: merged,
+    url: pr.url,
   };
 }
 
 async function setAllPaneTokens(paneId: string, state: TokenState): Promise<void> {
   const signals = signalTokens(state);
   await Promise.all([
-    setToken(paneId, TOKEN_ID, tokenId(state)),
+    setToken(paneId, TOKEN_ID, tokenId(state), idLink(state)),
     setToken(paneId, TOKEN_STATUS, tokenStatus(state)),
     ...SIGNAL_TOKENS.map((name) =>
       signals[name] ? setToken(paneId, name, signals[name]) : clearToken(paneId, name),
@@ -121,7 +122,7 @@ async function clearAllPaneTokens(paneId: string): Promise<void> {
 async function setAllWorkspaceTokens(wsId: string, state: TokenState): Promise<void> {
   const signals = signalTokens(state);
   await Promise.all([
-    setWorkspaceToken(wsId, TOKEN_ID, tokenId(state)),
+    setWorkspaceToken(wsId, TOKEN_ID, tokenId(state), idLink(state)),
     setWorkspaceToken(wsId, TOKEN_STATUS, tokenStatus(state)),
     ...SIGNAL_TOKENS.map((name) =>
       signals[name] ? setWorkspaceToken(wsId, name, signals[name]) : clearWorkspaceToken(wsId, name),
@@ -143,6 +144,11 @@ const cfg = await loadConfig(
   process.env.HERDR_PLUGIN_CONFIG_DIR,
 );
 const viewer = await fetchViewer();
+
+/** The URL `$pr_id` opens on click, or none when links are turned off. */
+function idLink(state: TokenState): string | null {
+  return cfg.tokenLinks ? (state.url ?? null) : null;
+}
 const automatic = Boolean(process.env.HERDR_PLUGIN_EVENT_JSON);
 
 // Workspace-level tokens: set $pr_id and $pr_status on every workspace that

@@ -158,6 +158,8 @@ export interface BranchPr {
   isDraft: boolean;
   reviewDecision: string | null;
   mergeable: string | null;
+  /** The PR's web URL, when gh reported one. */
+  url: string | null;
   unresolvedHuman: number;
   unresolvedBot: number;
   isQueued: boolean;
@@ -174,7 +176,7 @@ export async function fetchBranchPr(
   viewer = "",
 ): Promise<BranchPr | null> {
   const r = await run(
-    ["pr", "view", branch, "--json", "number,state,isDraft,reviewDecision,mergeable"],
+    ["pr", "view", branch, "--json", "number,state,isDraft,reviewDecision,mergeable,url"],
     cwd,
   );
   if (!r.ok) return null;
@@ -188,6 +190,7 @@ export async function fetchBranchPr(
       isDraft: j.isDraft === true,
       reviewDecision: typeof j.reviewDecision === "string" ? j.reviewDecision : null,
       mergeable: typeof j.mergeable === "string" ? j.mergeable : null,
+      url: typeof j.url === "string" && /^https?:\/\//.test(j.url) ? j.url : null,
       unresolvedHuman: extras.unresolvedHuman,
       unresolvedBot: extras.unresolvedBot,
       isQueued: extras.isQueued,

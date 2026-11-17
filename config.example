@@ -109,3 +109,8 @@
 # fire far more often than a PR's state changes, and each lookup is two `gh`
 # subprocesses.
 #TOKEN_THROTTLE_SECONDS=30
+
+# Set to 0/off/false/no to stop attaching the PR's URL to the `$pr_id` sidebar
+# token. With links on, a Herdr that supports token links underlines `$pr_id`
+# and opens the PR on click; an older Herdr gets the token without the link.
+#TOKEN_LINKS=on
